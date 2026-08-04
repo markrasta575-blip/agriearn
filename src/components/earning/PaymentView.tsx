@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   CheckCircle2,
+  Copy,
   CreditCard,
   Landmark,
   Banknote,
@@ -35,24 +36,45 @@ import { cn } from "@/lib/utils";
 
 type Method = "Bank Transfer" | "Telebirr" | "Cash";
 
-const METHODS: { value: Method; label: string; icon: React.ReactNode; hint: string }[] = [
+interface MethodDef {
+  value: Method;
+  label: string;
+  icon: React.ReactNode;
+  hint: string;
+  // Account the customer should send money to. null = no account shown.
+  account?: {
+    number: string;
+    label: string;
+  } | null;
+}
+
+const METHODS: MethodDef[] = [
   {
     value: "Bank Transfer",
     label: "Bank Transfer",
     icon: <Landmark className="size-4" />,
     hint: "Transfer to our bank account and paste the receipt number.",
+    account: {
+      number: "1000597190208",
+      label: "Bank Account Number",
+    },
   },
   {
     value: "Telebirr",
     label: "Telebirr",
     icon: <CreditCard className="size-4" />,
     hint: "Send via Telebirr and enter the transaction reference.",
+    account: {
+      number: "0960565171",
+      label: "Telebirr Number",
+    },
   },
   {
     value: "Cash",
     label: "Cash",
     icon: <Banknote className="size-4" />,
     hint: "Pay cash at an agent. Enter the agent receipt code.",
+    account: null,
   },
 ];
 
@@ -321,6 +343,8 @@ export function PaymentView() {
               {METHODS.find((m) => m.value === method)?.hint}
             </p>
 
+            <PaymentAccountPanel method={method} />
+
             <div className="mt-5 space-y-2">
               <Label htmlFor="payment-ref">Payment reference</Label>
               <Input
@@ -404,5 +428,63 @@ export function PaymentView() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Shows the destination account number for the selected payment method.
+ * - Bank Transfer  -> 1000597190208  (Bank Account Number)
+ * - Telebirr       -> 0960565171     (Telebirr Number)
+ * - Cash           -> no account shown
+ * Includes a copy-to-clipboard button.
+ */
+function PaymentAccountPanel({ method }: { method: Method }) {
+  const def = METHODS.find((m) => m.value === method);
+  const account = def?.account ?? null;
+
+  if (!account) return null;
+
+  return (
+    <motion.div
+      key={method}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="mt-4 rounded-xl border border-gold/40 bg-gold-soft/40 p-4"
+    >
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            {account.label}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2">
+            <span className="font-mono text-lg font-extrabold tracking-wide text-foreground">
+              {account.number}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Send{" "}
+            <span className="font-semibold text-foreground">exactly</span> the
+            amount shown, then paste the reference below.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 rounded-full"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(account.number);
+              toast.success("Account number copied");
+            } catch {
+              toast.error("Could not copy — please select and copy manually");
+            }
+          }}
+        >
+          <Copy className="size-4" /> Copy
+        </Button>
+      </div>
+    </motion.div>
   );
 }

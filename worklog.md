@@ -168,3 +168,27 @@ Work Log:
 
 Stage Summary:
 - Single-line-class root cause (missing HTTP method on register/login). Both auth flows now work via the form.
+
+---
+Task ID: 8
+Agent: orchestrator (main)
+Task: Show the correct destination account number when a payment method is selected on the payment page.
+
+Work Log:
+- Extended the METHODS config in src/components/earning/PaymentView.tsx with an `account` field per method:
+  - Bank Transfer -> account number 1000597190208 (label "Bank Account Number")
+  - Telebirr      -> account number 0960565171     (label "Telebirr Number")
+  - Cash          -> null (no account shown)
+- Added a new PaymentAccountPanel component that renders a gold-accented box with the account label, the large monospaced account number, an instruction line, and a Copy-to-clipboard button (navigator.clipboard.writeText + toast).
+- The panel is placed right under the method hint and animates in on method change (framer-motion key=method).
+- Verified in Agent Browser:
+  - Default Bank Transfer shows "BANK ACCOUNT NUMBER" + 1000597190208 + Copy button.
+  - Click Telebirr -> panel swaps to "TELEBIRR NUMBER" + 0960565171.
+  - Click Cash -> no account panel (correct).
+  - Switch back to Bank Transfer -> 1000597190208 reappears.
+  - VLM confirmed both panels render with the correct digits and Copy button (screenshots saved).
+  - Full payment still submits: filled reference, clicked Confirm Payment -> POST /api/purchases -> success screen ("Request Submitted").
+- `bun run lint` PASS; dev.log clean.
+
+Stage Summary:
+- Selecting Bank Transfer now displays account 1000597190208; selecting Telebirr displays 0960565171. Both with copy-to-clipboard. Cash shows no account. Existing payment flow unchanged.
