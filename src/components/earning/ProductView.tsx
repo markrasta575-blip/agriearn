@@ -11,21 +11,33 @@ import {
   Loader2,
   Wheat,
   Tag,
+  Eye,
+  CircleDot,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { productsApi } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { formatETB } from "@/lib/format";
 import { toast } from "sonner";
 import type { ProductPublic } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export function ProductView() {
   const { user, startPayment, openAuth, setView } = useStore();
   const [products, setProducts] = useState<ProductPublic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailProduct, setDetailProduct] = useState<ProductPublic | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -76,7 +88,7 @@ export function ProductView() {
           <br className="hidden sm:block" /> Earn Every Day.
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-balance text-sm text-muted-foreground sm:text-base">
-          Buy a verified wheat investment package, get daily payouts to your
+          Buy a verified agriculture investment package, get daily payouts to your
           wallet, and withdraw anytime. Transparent, asset-backed income.
         </p>
       </motion.div>
@@ -110,13 +122,13 @@ export function ProductView() {
                   alt={featured.name}
                   className="h-full w-full object-cover"
                 />
-                <div className="absolute left-4 top-4 flex gap-2">
-                  <Badge className="bg-background/90 text-foreground backdrop-blur">
+                <div className="absolute left-4 top-4 flex flex-wrap gap-2">
+                  <Badge className="bg-green-soft text-green-deep">
                     <Tag className="size-3" /> {featured.category}
                   </Badge>
                   {featured.status === "AVAILABLE" && (
-                    <Badge className="bg-gold-gradient text-primary-foreground">
-                      Available
+                    <Badge className="bg-green-gradient text-white">
+                      <CircleDot className="size-3" /> Available
                     </Badge>
                   )}
                 </div>
@@ -141,7 +153,7 @@ export function ProductView() {
 
                 <div className="flex flex-wrap gap-3">
                   <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-card px-4 py-2.5">
-                    <TrendingUp className="size-4 text-gold-deep" />
+                    <TrendingUp className="size-4 text-green-deep" />
                     <div>
                       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
                         Daily Earnings
@@ -180,7 +192,7 @@ export function ProductView() {
                   </ul>
                 )}
 
-                <div className="mt-auto pt-2">
+                <div className="mt-auto flex flex-col gap-3 pt-2 sm:flex-row sm:items-center">
                   <Button
                     size="lg"
                     onClick={() => handleBuy(featured)}
@@ -190,8 +202,17 @@ export function ProductView() {
                     <ShoppingCart className="size-4" />
                     Buy Now
                   </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setDetailProduct(featured)}
+                    className="w-full rounded-full border-green-deep/40 text-green-deep hover:bg-green-soft/60 sm:w-auto"
+                  >
+                    <Eye className="size-4" />
+                    View Details
+                  </Button>
                   {!user && (
-                    <p className="mt-2 text-center text-xs text-muted-foreground sm:text-left">
+                    <p className="text-center text-xs text-muted-foreground sm:text-left">
                       You need to log in before purchasing.
                     </p>
                   )}
@@ -206,8 +227,8 @@ export function ProductView() {
         </Card>
       )}
 
-      {/* All Products grid */}
-      {!loading && products.length > 1 && (
+      {/* All Products grid (shows every product, including the featured one) */}
+      {!loading && products.length > 0 && (
         <div className="mt-12">
           <div className="mb-5 flex items-center gap-2">
             <Sparkles className="size-5 text-gold-deep" />
@@ -216,7 +237,7 @@ export function ProductView() {
             </h3>
           </div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {products.slice(1).map((p, i) => (
+            {products.map((p, i) => (
               <motion.div
                 key={p.id}
                 initial={{ opacity: 0, y: 8 }}
@@ -224,18 +245,30 @@ export function ProductView() {
                 transition={{ delay: i * 0.05 }}
                 whileHover={{ y: -4 }}
               >
-                <Card className="group h-full overflow-hidden p-0">
+                <Card className="group flex h-full flex-col overflow-hidden p-0 transition-shadow hover:shadow-lg">
+                  {/* Large product image */}
                   <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
                     <img
                       src={p.image}
                       alt={p.name}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
-                    <Badge className="absolute right-3 top-3 bg-background/90 text-foreground backdrop-blur">
-                      {p.category}
-                    </Badge>
+                    <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
+                      <Badge className="bg-green-soft text-green-deep backdrop-blur">
+                        <Tag className="size-3" /> {p.category}
+                      </Badge>
+                      {p.status === "AVAILABLE" ? (
+                        <Badge className="bg-green-gradient text-white backdrop-blur">
+                          <CircleDot className="size-3" /> Available
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-muted text-muted-foreground backdrop-blur">
+                          Unavailable
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-3 p-5">
+                  <div className="flex flex-1 flex-col gap-3 p-5">
                     <div>
                       <h4 className="line-clamp-1 font-bold text-foreground">
                         {p.name}
@@ -248,18 +281,33 @@ export function ProductView() {
                       <span className="text-lg font-extrabold text-gold-gradient">
                         {formatETB(p.price)}
                       </span>
-                      <span className="rounded-full bg-gold-soft px-2.5 py-0.5 text-[11px] font-semibold text-gold-deep">
+                      <span className="flex items-center gap-1 rounded-full bg-green-soft px-2.5 py-0.5 text-[11px] font-semibold text-green-deep">
+                        <TrendingUp className="size-3" />
                         {formatETB(p.dailyIncome)}/day
                       </span>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleBuy(p)}
-                      disabled={p.status !== "AVAILABLE"}
-                      className="bg-gold-gradient text-primary-foreground shadow hover:opacity-90 rounded-full"
-                    >
-                      {p.status === "AVAILABLE" ? "Buy Now" : "Unavailable"}
-                    </Button>
+                    <div className="mt-auto flex gap-2 pt-1">
+                      {/* Yellow Buy Now button */}
+                      <Button
+                        size="sm"
+                        onClick={() => handleBuy(p)}
+                        disabled={p.status !== "AVAILABLE"}
+                        className="flex-1 bg-gold-gradient text-primary-foreground shadow hover:opacity-90 rounded-full"
+                      >
+                        <ShoppingCart className="size-3.5" />
+                        {p.status === "AVAILABLE" ? "Buy Now" : "Unavailable"}
+                      </Button>
+                      {/* View Details button */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDetailProduct(p)}
+                        className="rounded-full border-green-deep/40 text-green-deep hover:bg-green-soft/60"
+                      >
+                        <Eye className="size-3.5" />
+                        Details
+                      </Button>
+                    </div>
                   </div>
                 </Card>
               </motion.div>
@@ -289,6 +337,129 @@ export function ProductView() {
           <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
       )}
+
+      {/* Product Details dialog */}
+      <ProductDetailsDialog
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onBuy={(p) => {
+          setDetailProduct(null);
+          handleBuy(p);
+        }}
+      />
     </div>
+  );
+}
+
+function ProductDetailsDialog({
+  product,
+  onClose,
+  onBuy,
+}: {
+  product: ProductPublic | null;
+  onClose: () => void;
+  onBuy: (p: ProductPublic) => void;
+}) {
+  return (
+    <Dialog open={!!product} onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-green-gradient text-white">
+              <Eye className="size-4" />
+            </span>
+            <span className="text-gold-gradient">Product Details</span>
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Full details for {product?.name}
+          </DialogDescription>
+        </DialogHeader>
+        {product && (
+          <div className="space-y-4">
+            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted">
+              <img
+                src={product.image}
+                alt={product.name}
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute left-3 top-3 flex gap-2">
+                <Badge className="bg-green-soft text-green-deep backdrop-blur">
+                  <Tag className="size-3" /> {product.category}
+                </Badge>
+                {product.status === "AVAILABLE" && (
+                  <Badge className="bg-green-gradient text-white backdrop-blur">
+                    <CircleDot className="size-3" /> Available
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-extrabold text-foreground">
+                {product.name}
+              </h3>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {product.description}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-border/60 bg-card p-3">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Price
+                </div>
+                <div className="text-lg font-extrabold text-gold-gradient">
+                  {formatETB(product.price)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-card p-3">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Daily Earnings
+                </div>
+                <div className="text-lg font-extrabold text-green-deep">
+                  {formatETB(product.dailyIncome)}/day
+                </div>
+              </div>
+            </div>
+            {product.benefits.length > 0 && (
+              <ul className="grid gap-2">
+                {product.benefits.map((b, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-sm text-foreground"
+                  >
+                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-green-soft text-green-deep">
+                      <Check className="size-3" />
+                    </span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-card p-3 text-xs text-muted-foreground">
+              <ShieldCheck className="size-4 text-green-deep" />
+              Payment is reviewed by admin. The package activates once approved.
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => onBuy(product)}
+                disabled={product.status !== "AVAILABLE"}
+                className={cn(
+                  "flex-1 bg-gold-gradient text-primary-foreground shadow hover:opacity-90 rounded-full font-semibold"
+                )}
+              >
+                <ShoppingCart className="size-4" />
+                Buy Now
+              </Button>
+              <Button
+                variant="outline"
+                onClick={onClose}
+                className="rounded-full"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

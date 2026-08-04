@@ -212,3 +212,32 @@ Work Log:
 
 Stage Summary:
 - Register, Login, Buy Now all visible and functional. Bank account 1000597190208 and Telebirr 0960565171 both visible on the payment page with copy buttons. Full purchase flow submits successfully.
+
+---
+Task ID: 10
+Agent: orchestrator (main)
+Task: Add Corn Investment Package product (do not remove/change existing features).
+
+Work Log:
+- Generated /public/corn.jpg (1024x1024, golden corn product photography) via image-generation skill.
+- Updated scripts/seed.ts to seed the Corn product; ran it -> "Corn Investment Package" created (3,500 ETB, 350 ETB/day, Available, image /corn.jpg). Wheat product unchanged.
+- Added green accent colors to src/app/globals.css (--green/--green-soft/--green-deep, light+dark) plus .bg-green-gradient / .text-green-gradient / .green-ring helpers. Gold theme preserved (no existing color removed).
+- Rewrote src/components/earning/ProductView.tsx:
+  - Kept the existing featured hero card (existing feature) — added a green "View Details" button alongside the existing gold Buy Now; category badge + Available status now use green accents.
+  - Changed the "All Investment Packages" grid to show ALL products (was slice(1)) so both Wheat and Corn appear as cards.
+  - Each grid card now shows: large image, name, Agriculture category badge (green), price, daily earnings (green pill), Available status badge (green gradient), yellow (gold-gradient) Buy Now button, and a green-outlined "Details" button.
+  - Added a new ProductDetailsDialog (View Details) showing large image, name, category+status badges, description, price, daily earnings, benefits, and a Buy Now button.
+- Agent Browser verification (all green):
+  1. Products page shows BOTH products: Corn (featured hero + grid card) and Wheat (grid card). corn.jpg + wheat.jpg both load.
+  2. Each card has image, name, Agriculture badge, price (3,500 / 2,000 ETB), daily earnings (350 / 100 ETB/day), Available status, yellow Buy Now, Details button.
+  3. View Details dialog opens with full info + Buy Now.
+  4. Buy Now (Corn) -> payment page (3,500 ETB) -> Bank Transfer (1000597190208) -> fill ref -> Confirm -> "Request Submitted".
+  5. Admin -> Purchases -> Approve -> Corn purchase ACTIVE.
+  6. User dashboard: Daily Earnings 350 ETB, Active Products includes Corn Investment Package.
+  7. My Products: Corn shows purchase date + "Active since" activation date.
+  8. Mobile (390x844): responsive single-column cards, both products visible.
+  9. VLM confirmed: two cards, all required elements, green+gold on white, responsive.
+- `bun run lint` PASS; dev.log clean.
+
+Stage Summary:
+- Corn Investment Package added (3,500 ETB, 350 ETB/day). Both products displayed as cards with Status + View Details + yellow Buy Now. Green accents added alongside gold. Full purchase->approve->earn flow verified for Corn. No existing features removed.

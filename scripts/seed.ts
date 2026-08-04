@@ -73,6 +73,47 @@ async function main() {
     console.log("✓ Ensured product:", product.name);
   }
 
+  // Corn product
+  const cornName = "Corn Investment Package";
+  const existingCorn = await db.product.findFirst({ where: { name: cornName } });
+  const cornBenefits = JSON.stringify([
+    "Earn 350 ETB every single day",
+    "Premium package — 3,500 ETB",
+    "Backed by real agriculture assets",
+    "Daily payouts to your wallet",
+    "Transparent income tracking",
+    "Withdraw anytime (min 300 ETB)",
+  ]);
+  if (!existingCorn) {
+    const corn = await db.product.create({
+      data: {
+        name: cornName,
+        category: "Agriculture",
+        price: 3500,
+        dailyIncome: 350,
+        description:
+          "Purchase the Corn Investment Package for 3,500 ETB. After the payment is confirmed, the package becomes active and the user starts earning 350 ETB per day according to the platform's business rules.",
+        image: "/corn.jpg",
+        benefits: cornBenefits,
+        status: "AVAILABLE",
+      },
+    });
+    console.log("✓ Created product:", corn.name, "(", corn.id, ")");
+  } else {
+    const corn = await db.product.update({
+      where: { id: existingCorn.id },
+      data: {
+        category: "Agriculture",
+        price: 3500,
+        dailyIncome: 350,
+        image: "/corn.jpg",
+        benefits: cornBenefits,
+        status: "AVAILABLE",
+      },
+    });
+    console.log("✓ Ensured product:", corn.name);
+  }
+
   console.log("\nSeeding complete.");
   console.log("Admin login  -> phone: 0990000000  password: admin123");
 }
