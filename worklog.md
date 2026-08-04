@@ -192,3 +192,23 @@ Work Log:
 
 Stage Summary:
 - Selecting Bank Transfer now displays account 1000597190208; selecting Telebirr displays 0960565171. Both with copy-to-clipboard. Cash shows no account. Existing payment flow unchanged.
+
+---
+Task ID: 9
+Agent: orchestrator (main)
+Task: Confirm register, login, Buy Now and the account numbers are all visible and working.
+
+Work Log:
+- Full end-to-end re-verification in Agent Browser (fresh session):
+  1. Product page: "Login" button + "Buy Now" button both visible.
+  2. Register: opened auth dialog -> Register tab -> typed name/phone/password -> Create Account -> POST /api/auth/register 200 -> redirected to dashboard (authenticated).
+  3. Login: logged out -> Login tab -> typed phone/password -> Sign In -> POST /api/auth/login 200 -> authenticated (Logout visible).
+  4. Buy Now: clicked -> payment page loaded with Bank Transfer / Telebirr / Cash selector visible.
+  5. Default Bank Transfer shows "BANK ACCOUNT NUMBER" + 1000597190208.
+  6. Click Telebirr -> panel swaps to "TELEBIRR NUMBER" + 0960565171.
+  7. Filled payment reference -> Confirm Payment -> POST /api/purchases -> "Request Submitted" success screen.
+- VLM confirmed the gold account box with the correct digits + Copy button is visually present (screenshot saved).
+- `bun run lint` PASS; dev.log clean (no errors/warnings).
+
+Stage Summary:
+- Register, Login, Buy Now all visible and functional. Bank account 1000597190208 and Telebirr 0960565171 both visible on the payment page with copy buttons. Full purchase flow submits successfully.
