@@ -1,0 +1,120 @@
+// Z.ai Earning Platform - Database Schema
+// SQLite (Prisma) for the live Next.js app.
+// A MySQL equivalent (database.sql) ships in /database.sql for XAMPP users.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  password  String
+  name      String?
+  role      String   @default("USER") // USER | ADMIN
+  balance   Float    @default(0) // withdrawable balance (ETB)
+  status    String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases    Purchase[]
+  earnings     Earning[]
+  withdrawals  Withdrawal[]
+  bankAccounts BankAccount[]
+  transactions Transaction[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  category    String
+  price       Float
+  dailyIncome Float
+  description String
+  image       String
+  benefits    String // JSON array string (primitive types only)
+  status      String   @default("AVAILABLE") // AVAILABLE | UNAVAILABLE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  purchases   Purchase[]
+}
+
+model Purchase {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price          Float
+  dailyIncome    Float
+  status         String    @default("PENDING_APPROVAL") // PENDING_APPROVAL | ACTIVE | REJECTED | COMPLETED
+  paymentMethod  String?
+  paymentRef     String?
+  activationDate DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  earnings       Earning[]
+}
+
+model Earning {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  amount     Float
+  date       DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model Withdrawal {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Float
+  bankName      String
+  accountHolder String
+  accountNumber String
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankName      String
+  accountHolder String
+  accountNumber String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String // EARNING | WITHDRAWAL | PURCHASE
+  amount      Float
+  status      String   @default("COMPLETED") // PENDING | COMPLETED | FAILED | REJECTED
+  description String?
+  referenceId String?
+  createdAt   DateTime @default(now())
+}

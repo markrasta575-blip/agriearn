@@ -1,0 +1,996 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useMemo, useState } from "react";
+     4→import { motion } from "framer-motion";
+     5→import { toast } from "sonner";
+     6→import {
+     7→  Bar,
+     8→  BarChart,
+     9→  CartesianGrid,
+    10→  Line,
+    11→  LineChart,
+    12→  ResponsiveContainer,
+    13→  Tooltip as RTooltip,
+    14→  XAxis,
+    15→  YAxis,
+    16→  Area,
+    17→  AreaChart,
+    18→} from "recharts";
+    19→import {
+    20→  Users,
+    21→  Package,
+    22→  ShoppingCart,
+    23→  Wallet,
+    24→  TrendingUp,
+    25→  Coins,
+    26→  BadgeCheck,
+    27→  Plus,
+    28→  Pencil,
+    29→  Trash2,
+    30→  Check,
+    31→  X,
+    32→  Loader2,
+    33→  ShieldAlert,
+    34→  Image as ImageIcon,
+    35→  Banknote,
+    36→} from "lucide-react";
+    37→import { Button } from "@/components/ui/button";
+    38→import { Card } from "@/components/ui/card";
+    39→import { Input } from "@/components/ui/input";
+    40→import { Label } from "@/components/ui/label";
+    41→import { Textarea } from "@/components/ui/textarea";
+    42→import { Badge } from "@/components/ui/badge";
+    43→import {
+    44→  Tabs,
+    45→  TabsContent,
+    46→  TabsList,
+    47→  TabsTrigger,
+    48→} from "@/components/ui/tabs";
+    49→import {
+    50→  Select,
+    51→  SelectContent,
+    52→  SelectItem,
+    53→  SelectTrigger,
+    54→  SelectValue,
+    55→} from "@/components/ui/select";
+    56→import {
+    57→  Dialog,
+    58→  DialogContent,
+    59→  DialogDescription,
+    60→  DialogFooter,
+    61→  DialogHeader,
+    62→  DialogTitle,
+    63→} from "@/components/ui/dialog";
+    64→import {
+    65→  Table,
+    66→  TableBody,
+    67→  TableCell,
+    68→  TableHead,
+    69→  TableHeader,
+    70→  TableRow,
+    71→} from "@/components/ui/table";
+    72→import { Skeleton } from "@/components/ui/skeleton";
+    73→import {
+    74→  adminApi,
+    75→  productsApi,
+    76→  purchasesApi,
+    77→  withdrawalsApi,
+    78→  type ProductPayload,
+    79→} from "@/lib/api";
+    80→import { formatETB, formatNumber, formatDate, shortDate } from "@/lib/format";
+    81→import type {
+    82→  AdminReport,
+    83→  ProductPublic,
+    84→  PurchasePublic,
+    85→  Role,
+    86→  UserPublic,
+    87→  UserStatus,
+    88→  WithdrawalPublic,
+    89→} from "@/lib/types";
+    90→import { StatCard } from "@/components/earning/StatCard";
+    91→import {
+    92→  StatusBadge,
+    93→  purchaseStatusTone,
+    94→  withdrawalStatusTone,
+    95→} from "@/components/earning/StatusBadge";
+    96→import { ImageUpload } from "@/components/earning/ImageUpload";
+    97→
+    98→/* ============================================================ Reports Tab */
+    99→function ReportsTab() {
+   100→  const [report, setReport] = useState<AdminReport | null>(null);
+   101→  const [revenue7d, setRevenue7d] = useState<{ date: string; total: number }[]>([]);
+   102→  const [purchases7d, setPurchases7d] = useState<{ date: string; total: number }[]>([]);
+   103→  const [loading, setLoading] = useState(true);
+   104→
+   105→  useEffect(() => {
+   106→    let active = true;
+   107→    (async () => {
+   108→      try {
+   109→        const res = await adminApi.reports();
+   110→        if (active) {
+   111→          setReport(res.report);
+   112→          setRevenue7d(res.revenue7d);
+   113→          setPurchases7d(res.purchases7d);
+   114→        }
+   115→      } catch (err) {
+   116→        if (active) toast.error(err instanceof Error ? err.message : "Failed to load reports");
+   117→      } finally {
+   118→        if (active) setLoading(false);
+   119→      }
+   120→    })();
+   121→    return () => {
+   122→      active = false;
+   123→    };
+   124→  }, []);
+   125→
+   126→  if (loading) {
+   127→    return (
+   128→      <div className="space-y-4">
+   129→        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+   130→          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+   131→            <Skeleton key={i} className="h-24" />
+   132→          ))}
+   133→        </div>
+   134→        <Skeleton className="h-64" />
+   135→      </div>
+   136→    );
+   137→  }
+   138→  if (!report) return null;
+   139→
+   140→  const revenueData = revenue7d.map((r) => ({ name: shortDate(r.date), total: r.total }));
+   141→  const purchasesData = purchases7d.map((r) => ({ name: shortDate(r.date), total: r.total }));
+   142→
+   143→  return (
+   144→    <div className="space-y-6">
+   145→      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+   146→        <StatCard icon={<Users className="size-4" />} label="Users" value={formatNumber(report.totalUsers)} />
+   147→        <StatCard icon={<Package className="size-4" />} label="Products" value={formatNumber(report.totalProducts)} />
+   148→        <StatCard icon={<ShoppingCart className="size-4" />} label="Purchases" value={formatNumber(report.totalPurchases)} />
+   149→        <StatCard icon={<BadgeCheck className="size-4" />} label="Active" value={formatNumber(report.activePurchases)} />
+   150→        <StatCard icon={<Coins className="size-4" />} label="Pending Payments" value={formatNumber(report.pendingPayments)} />
+   151→        <StatCard icon={<Wallet className="size-4" />} label="Pending Withdrawals" value={formatNumber(report.pendingWithdrawals)} />
+   152→        <StatCard icon={<TrendingUp className="size-4" />} label="Revenue" value={formatETB(report.totalRevenue)} />
+   153→        <StatCard icon={<Banknote className="size-4" />} label="Withdrawn" value={formatETB(report.totalWithdrawn)} />
+   154→      </div>
+   155→
+   156→      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+   157→        <Card className="gold-ring p-5">
+   158→          <div className="mb-3 flex items-center justify-between">
+   159→            <h3 className="font-bold text-foreground">Revenue (7d)</h3>
+   160→            <Badge className="bg-gold-gradient text-primary-foreground">ETB</Badge>
+   161→          </div>
+   162→          <div className="h-56">
+   163→            <ResponsiveContainer width="100%" height="100%">
+   164→              <AreaChart data={revenueData}>
+   165→                <defs>
+   166→                  <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
+   167→                    <stop offset="0%" stopColor="oklch(0.74 0.14 80)" stopOpacity={0.55} />
+   168→                    <stop offset="100%" stopColor="oklch(0.74 0.14 80)" stopOpacity={0} />
+   169→                  </linearGradient>
+   170→                </defs>
+   171→                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.91 0.02 85)" />
+   172→                <XAxis dataKey="name" stroke="oklch(0.5 0.02 75)" fontSize={11} />
+   173→                <YAxis stroke="oklch(0.5 0.02 75)" fontSize={11} />
+   174→                <RTooltip />
+   175→                <Area
+   176→                  type="monotone"
+   177→                  dataKey="total"
+   178→                  stroke="oklch(0.62 0.13 75)"
+   179→                  strokeWidth={2}
+   180→                  fill="url(#goldFill)"
+   181→                />
+   182→              </AreaChart>
+   183→            </ResponsiveContainer>
+   184→          </div>
+   185→        </Card>
+   186→
+   187→        <Card className="gold-ring p-5">
+   188→          <div className="mb-3 flex items-center justify-between">
+   189→            <h3 className="font-bold text-foreground">Purchases (7d)</h3>
+   190→            <Badge variant="secondary">count</Badge>
+   191→          </div>
+   192→          <div className="h-56">
+   193→            <ResponsiveContainer width="100%" height="100%">
+   194→              <BarChart data={purchasesData}>
+   195→                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.91 0.02 85)" />
+   196→                <XAxis dataKey="name" stroke="oklch(0.5 0.02 75)" fontSize={11} />
+   197→                <YAxis stroke="oklch(0.5 0.02 75)" fontSize={11} allowDecimals={false} />
+   198→                <RTooltip />
+   199→                <Bar dataKey="total" fill="oklch(0.74 0.14 80)" radius={[6, 6, 0, 0]} />
+   200→              </BarChart>
+   201→            </ResponsiveContainer>
+   202→          </div>
+   203→        </Card>
+   204→      </div>
+   205→    </div>
+   206→  );
+   207→}
+   208→
+   209→/* ============================================================ Products Tab */
+   210→interface ProductFormState {
+   211→  id?: string;
+   212→  name: string;
+   213→  category: string;
+   214→  price: string;
+   215→  dailyIncome: string;
+   216→  description: string;
+   217→  image: string;
+   218→  benefitsText: string;
+   219→  status: "AVAILABLE" | "UNAVAILABLE";
+   220→}
+   221→
+   222→const EMPTY_FORM: ProductFormState = {
+   223→  name: "",
+   224→  category: "Agriculture",
+   225→  price: "",
+   226→  dailyIncome: "",
+   227→  description: "",
+   228→  image: "/wheat.jpg",
+   229→  benefitsText: "",
+   230→  status: "AVAILABLE",
+   231→};
+   232→
+   233→function ProductDialog({
+   234→  open,
+   235→  onOpenChange,
+   236→  initial,
+   237→  onSaved,
+   238→}: {
+   239→  open: boolean;
+   240→  onOpenChange: (o: boolean) => void;
+   241→  initial?: ProductFormState | null;
+   242→  onSaved: () => void;
+   243→}) {
+   244→  const [form, setForm] = useState<ProductFormState>(initial ?? EMPTY_FORM);
+   245→  const [saving, setSaving] = useState(false);
+   246→
+   247→  useEffect(() => {
+   248→    setForm(initial ?? EMPTY_FORM);
+   249→  }, [initial, open]);
+   250→
+   251→  const set = <K extends keyof ProductFormState>(k: K, v: ProductFormState[K]) =>
+   252→    setForm((f) => ({ ...f, [k]: v }));
+   253→
+   254→  const submit = async (e: React.FormEvent) => {
+   255→    e.preventDefault();
+   256→    if (saving) return;
+   257→    setSaving(true);
+   258→    try {
+   259→      const benefits = form.benefitsText
+   260→        .split("\n")
+   261→        .map((s) => s.trim())
+   262→        .filter(Boolean);
+   263→      const payload: ProductPayload = {
+   264→        name: form.name.trim(),
+   265→        category: form.category.trim() || "Agriculture",
+   266→        price: Number(form.price) || 0,
+   267→        dailyIncome: Number(form.dailyIncome) || 0,
+   268→        description: form.description,
+   269→        image: form.image || "/wheat.jpg",
+   270→        benefits,
+   271→        status: form.status,
+   272→      };
+   273→      if (form.id) {
+   274→        await productsApi.update({ id: form.id, ...payload });
+   275→        toast.success("Product updated");
+   276→      } else {
+   277→        await productsApi.create(payload);
+   278→        toast.success("Product created");
+   279→      }
+   280→      onSaved();
+   281→      onOpenChange(false);
+   282→    } catch (err) {
+   283→      toast.error(err instanceof Error ? err.message : "Failed to save product");
+   284→    } finally {
+   285→      setSaving(false);
+   286→    }
+   287→  };
+   288→
+   289→  return (
+   290→    <Dialog open={open} onOpenChange={onOpenChange}>
+   291→      <DialogContent className="max-h-[90vh] overflow-y-auto scroll-gold sm:max-w-lg">
+   292→        <DialogHeader>
+   293→          <DialogTitle className="flex items-center gap-2">
+   294→            <Package className="size-5 text-gold-deep" />
+   295→            {form.id ? "Edit Product" : "Add Product"}
+   296→          </DialogTitle>
+   297→          <DialogDescription>
+   298→            Fill in the package details. Benefits are one per line.
+   299→          </DialogDescription>
+   300→        </DialogHeader>
+   301→        <form onSubmit={submit} className="space-y-3">
+   302→          <div className="space-y-1.5">
+   303→            <Label htmlFor="p-name">Name</Label>
+   304→            <Input
+   305→              id="p-name"
+   306→              value={form.name}
+   307→              onChange={(e) => set("name", e.target.value)}
+   308→              required
+   309→            />
+   310→          </div>
+   311→          <div className="grid grid-cols-2 gap-3">
+   312→            <div className="space-y-1.5">
+   313→              <Label htmlFor="p-cat">Category</Label>
+   314→              <Input
+   315→                id="p-cat"
+   316→                value={form.category}
+   317→                onChange={(e) => set("category", e.target.value)}
+   318→              />
+   319→            </div>
+   320→            <div className="space-y-1.5">
+   321→              <Label htmlFor="p-status">Status</Label>
+   322→              <Select
+   323→                value={form.status}
+   324→                onValueChange={(v) =>
+   325→                  set("status", v as "AVAILABLE" | "UNAVAILABLE")
+   326→                }
+   327→              >
+   328→                <SelectTrigger id="p-status" className="w-full">
+   329→                  <SelectValue />
+   330→                </SelectTrigger>
+   331→                <SelectContent>
+   332→                  <SelectItem value="AVAILABLE">Available</SelectItem>
+   333→                  <SelectItem value="UNAVAILABLE">Unavailable</SelectItem>
+   334→                </SelectContent>
+   335→              </Select>
+   336→            </div>
+   337→          </div>
+   338→          <div className="grid grid-cols-2 gap-3">
+   339→            <div className="space-y-1.5">
+   340→              <Label htmlFor="p-price">Price (ETB)</Label>
+   341→              <Input
+   342→                id="p-price"
+   343→                type="number"
+   344→                min={0}
+   345→                value={form.price}
+   346→                onChange={(e) => set("price", e.target.value)}
+   347→                required
+   348→              />
+   349→            </div>
+   350→            <div className="space-y-1.5">
+   351→              <Label htmlFor="p-daily">Daily income (ETB)</Label>
+   352→              <Input
+   353→                id="p-daily"
+   354→                type="number"
+   355→                min={0}
+   356→                value={form.dailyIncome}
+   357→                onChange={(e) => set("dailyIncome", e.target.value)}
+   358→                required
+   359→              />
+   360→            </div>
+   361→          </div>
+   362→          <div className="space-y-1.5">
+   363→            <Label htmlFor="p-desc">Description</Label>
+   364→            <Textarea
+   365→              id="p-desc"
+   366→              rows={3}
+   367→              value={form.description}
+   368→              onChange={(e) => set("description", e.target.value)}
+   369→            />
+   370→          </div>
+   371→          <div className="space-y-1.5">
+   372→            <Label htmlFor="p-ben">Benefits (one per line)</Label>
+   373→            <Textarea
+   374→              id="p-ben"
+   375→              rows={4}
+   376→              value={form.benefitsText}
+   377→              onChange={(e) => set("benefitsText", e.target.value)}
+   378→              placeholder={"Earn 100 ETB every single day\nBacked by real agriculture assets"}
+   379→            />
+   380→          </div>
+   381→          <div className="space-y-1.5">
+   382→            <Label>Image</Label>
+   383→            <ImageUpload
+   384→              value={form.image}
+   385→              onChange={(url) => set("image", url)}
+   386→            />
+   387→            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   388→              <ImageIcon className="size-3.5" />
+   389→              Upload a new image or keep the default wheat image.
+   390→            </div>
+   391→          </div>
+   392→          <DialogFooter>
+   393→            <Button
+   394→              type="button"
+   395→              variant="outline"
+   396→              onClick={() => onOpenChange(false)}
+   397→            >
+   398→              Cancel
+   399→            </Button>
+   400→            <Button
+   401→              type="submit"
+   402→              disabled={saving}
+   403→              className="bg-gold-gradient text-primary-foreground shadow hover:opacity-90 rounded-full"
+   404→            >
+   405→              {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+   406→              {form.id ? "Save Changes" : "Create Product"}
+   407→            </Button>
+   408→          </DialogFooter>
+   409→        </form>
+   410→      </DialogContent>
+   411→    </Dialog>
+   412→  );
+   413→}
+   414→
+   415→function ProductsTab() {
+   416→  const [products, setProducts] = useState<ProductPublic[]>([]);
+   417→  const [loading, setLoading] = useState(true);
+   418→  const [dialogOpen, setDialogOpen] = useState(false);
+   419→  const [editing, setEditing] = useState<ProductFormState | null>(null);
+   420→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   421→
+   422→  const load = async () => {
+   423→    setLoading(true);
+   424→    try {
+   425→      const res = await productsApi.list(true);
+   426→      setProducts(res.products);
+   427→    } catch (err) {
+   428→      toast.error(err instanceof Error ? err.message : "Failed to load products");
+   429→    } finally {
+   430→      setLoading(false);
+   431→    }
+   432→  };
+   433→
+   434→  useEffect(() => {
+   435→    void load();
+   436→  }, []);
+   437→
+   438→  const openAdd = () => {
+   439→    setEditing(null);
+   440→    setDialogOpen(true);
+   441→  };
+   442→  const openEdit = (p: ProductPublic) => {
+   443→    setEditing({
+   444→      id: p.id,
+   445→      name: p.name,
+   446→      category: p.category,
+   447→      price: String(p.price),
+   448→      dailyIncome: String(p.dailyIncome),
+   449→      description: p.description,
+   450→      image: p.image,
+   451→      benefitsText: p.benefits.join("\n"),
+   452→      status: p.status,
+   453→    });
+   454→    setDialogOpen(true);
+   455→  };
+   456→
+   457→  const remove = async (id: string) => {
+   458→    setDeletingId(id);
+   459→    try {
+   460→      await productsApi.remove(id);
+   461→      toast.success("Product deleted");
+   462→      await load();
+   463→    } catch (err) {
+   464→      toast.error(err instanceof Error ? err.message : "Failed to delete");
+   465→    } finally {
+   466→      setDeletingId(null);
+   467→    }
+   468→  };
+   469→
+   470→  return (
+   471→    <div className="space-y-4">
+   472→      <div className="flex items-center justify-between">
+   473→        <h3 className="font-bold text-foreground">All Products</h3>
+   474→        <Button
+   475→          onClick={openAdd}
+   476→          className="bg-gold-gradient text-primary-foreground shadow hover:opacity-90 rounded-full"
+   477→        >
+   478→          <Plus className="size-4" /> Add Product
+   479→        </Button>
+   480→      </div>
+   481→      <Card className="p-0">
+   482→        {loading ? (
+   483→          <div className="space-y-2 p-4">
+   484→            {[0, 1, 2].map((i) => (
+   485→              <Skeleton key={i} className="h-10" />
+   486→            ))}
+   487→          </div>
+   488→        ) : (
+   489→          <Table>
+   490→            <TableHeader>
+   491→              <TableRow>
+   492→                <TableHead>Name</TableHead>
+   493→                <TableHead>Category</TableHead>
+   494→                <TableHead>Price</TableHead>
+   495→                <TableHead>Daily</TableHead>
+   496→                <TableHead>Status</TableHead>
+   497→                <TableHead className="text-right">Actions</TableHead>
+   498→              </TableRow>
+   499→            </TableHeader>
+   500→            <TableBody>
+   501→              {products.length === 0 ? (
+   502→                <TableRow>
+   503→                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+   504→                    No products yet.
+   505→                  </TableCell>
+   506→                </TableRow>
+   507→              ) : (
+   508→                products.map((p) => (
+   509→                  <TableRow key={p.id}>
+   510→                    <TableCell className="font-medium">{p.name}</TableCell>
+   511→                    <TableCell>{p.category}</TableCell>
+   512→                    <TableCell>{formatETB(p.price)}</TableCell>
+   513→                    <TableCell>{formatETB(p.dailyIncome)}/day</TableCell>
+   514→                    <TableCell>
+   515→                      <StatusBadge
+   516→                        label={p.status}
+   517→                        tone={p.status === "AVAILABLE" ? "green" : "muted"}
+   518→                      />
+   519→                    </TableCell>
+   520→                    <TableCell className="text-right">
+   521→                      <div className="flex justify-end gap-1">
+   522→                        <Button
+   523→                          size="icon"
+   524→                          variant="ghost"
+   525→                          aria-label="Edit"
+   526→                          onClick={() => openEdit(p)}
+   527→                        >
+   528→                          <Pencil className="size-4" />
+   529→                        </Button>
+   530→                        <Button
+   531→                          size="icon"
+   532→                          variant="ghost"
+   533→                          aria-label="Delete"
+   534→                          disabled={deletingId === p.id}
+   535→                          onClick={() => remove(p.id)}
+   536→                        >
+   537→                          {deletingId === p.id ? (
+   538→                            <Loader2 className="size-4 animate-spin" />
+   539→                          ) : (
+   540→                            <Trash2 className="size-4 text-rose-600" />
+   541→                          )}
+   542→                        </Button>
+   543→                      </div>
+   544→                    </TableCell>
+   545→                  </TableRow>
+   546→                ))
+   547→              )}
+   548→            </TableBody>
+   549→          </Table>
+   550→        )}
+   551→      </Card>
+   552→
+   553→      <ProductDialog
+   554→        open={dialogOpen}
+   555→        onOpenChange={setDialogOpen}
+   556→        initial={editing}
+   557→        onSaved={load}
+   558→      />
+   559→    </div>
+   560→  );
+   561→}
+   562→
+   563→/* ============================================================ Purchases Tab */
+   564→function PurchasesTab() {
+   565→  const [items, setItems] = useState<PurchasePublic[]>([]);
+   566→  const [loading, setLoading] = useState(true);
+   567→  const [busyId, setBusyId] = useState<string | null>(null);
+   568→
+   569→  const load = async () => {
+   570→    setLoading(true);
+   571→    try {
+   572→      const res = await purchasesApi.list(true);
+   573→      setItems(res.purchases);
+   574→    } catch (err) {
+   575→      toast.error(err instanceof Error ? err.message : "Failed to load purchases");
+   576→    } finally {
+   577→      setLoading(false);
+   578→    }
+   579→  };
+   580→
+   581→  useEffect(() => {
+   582→    void load();
+   583→  }, []);
+   584→
+   585→  const act = async (id: string, kind: "approve" | "reject") => {
+   586→    setBusyId(id);
+   587→    try {
+   588→      if (kind === "approve") await purchasesApi.approve(id);
+   589→      else await purchasesApi.reject(id);
+   590→      toast.success(kind === "approve" ? "Purchase approved" : "Purchase rejected");
+   591→      await load();
+   592→    } catch (err) {
+   593→      toast.error(err instanceof Error ? err.message : "Action failed");
+   594→    } finally {
+   595→      setBusyId(null);
+   596→    }
+   597→  };
+   598→
+   599→  return (
+   600→    <Card className="p-0">
+   601→      {loading ? (
+   602→        <div className="space-y-2 p-4">
+   603→          {[0, 1, 2].map((i) => (
+   604→            <Skeleton key={i} className="h-10" />
+   605→          ))}
+   606→        </div>
+   607→      ) : (
+   608→        <Table>
+   609→          <TableHeader>
+   610→            <TableRow>
+   611→              <TableHead>User</TableHead>
+   612→              <TableHead>Product</TableHead>
+   613→              <TableHead>Price</TableHead>
+   614→              <TableHead>Method</TableHead>
+   615→              <TableHead>Status</TableHead>
+   616→              <TableHead>Date</TableHead>
+   617→              <TableHead className="text-right">Actions</TableHead>
+   618→            </TableRow>
+   619→          </TableHeader>
+   620→          <TableBody>
+   621→            {items.length === 0 ? (
+   622→              <TableRow>
+   623→                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+   624→                  No purchases.
+   625→                </TableCell>
+   626→              </TableRow>
+   627→            ) : (
+   628→              items.map((p) => (
+   629→                <TableRow key={p.id}>
+   630→                  <TableCell className="font-mono text-xs">{p.userId.slice(0, 8)}</TableCell>
+   631→                  <TableCell className="font-medium">{p.productName}</TableCell>
+   632→                  <TableCell>{formatETB(p.price)}</TableCell>
+   633→                  <TableCell className="text-xs text-muted-foreground">
+   634→                    {p.paymentMethod ?? "—"}
+   635→                  </TableCell>
+   636→                  <TableCell>
+   637→                    <StatusBadge
+   638→                      label={p.status.replace("_", " ")}
+   639→                      tone={purchaseStatusTone(p.status)}
+   640→                    />
+   641→                  </TableCell>
+   642→                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+   643→                    {formatDate(p.createdAt)}
+   644→                  </TableCell>
+   645→                  <TableCell className="text-right">
+   646→                    {p.status === "PENDING_APPROVAL" ? (
+   647→                      <div className="flex justify-end gap-1">
+   648→                        <Button
+   649→                          size="sm"
+   650→                          variant="outline"
+   651→                          aria-label="Approve"
+   652→                          disabled={busyId === p.id}
+   653→                          onClick={() => act(p.id, "approve")}
+   654→                          className="rounded-full text-emerald-600"
+   655→                        >
+   656→                          <Check className="size-3.5" /> Approve
+   657→                        </Button>
+   658→                        <Button
+   659→                          size="sm"
+   660→                          variant="outline"
+   661→                          aria-label="Reject"
+   662→                          disabled={busyId === p.id}
+   663→                          onClick={() => act(p.id, "reject")}
+   664→                          className="rounded-full text-rose-600"
+   665→                        >
+   666→                          <X className="size-3.5" /> Reject
+   667→                        </Button>
+   668→                      </div>
+   669→                    ) : (
+   670→                      <span className="text-xs text-muted-foreground">—</span>
+   671→                    )}
+   672→                  </TableCell>
+   673→                </TableRow>
+   674→              ))
+   675→            )}
+   676→          </TableBody>
+   677→        </Table>
+   678→      )}
+   679→    </Card>
+   680→  );
+   681→}
+   682→
+   683→/* ============================================================ Withdrawals Tab */
+   684→function WithdrawalsTab() {
+   685→  const [items, setItems] = useState<WithdrawalPublic[]>([]);
+   686→  const [loading, setLoading] = useState(true);
+   687→  const [busyId, setBusyId] = useState<string | null>(null);
+   688→
+   689→  const load = async () => {
+   690→    setLoading(true);
+   691→    try {
+   692→      const res = await withdrawalsApi.list(true);
+   693→      setItems(res.withdrawals);
+   694→    } catch (err) {
+   695→      toast.error(err instanceof Error ? err.message : "Failed to load withdrawals");
+   696→    } finally {
+   697→      setLoading(false);
+   698→    }
+   699→  };
+   700→
+   701→  useEffect(() => {
+   702→    void load();
+   703→  }, []);
+   704→
+   705→  const act = async (id: string, kind: "approve" | "reject") => {
+   706→    setBusyId(id);
+   707→    try {
+   708→      if (kind === "approve") await withdrawalsApi.approve(id);
+   709→      else await withdrawalsApi.reject(id);
+   710→      toast.success(kind === "approve" ? "Withdrawal approved" : "Withdrawal rejected");
+   711→      await load();
+   712→    } catch (err) {
+   713→      toast.error(err instanceof Error ? err.message : "Action failed");
+   714→    } finally {
+   715→      setBusyId(null);
+   716→    }
+   717→  };
+   718→
+   719→  return (
+   720→    <Card className="p-0">
+   721→      {loading ? (
+   722→        <div className="space-y-2 p-4">
+   723→          {[0, 1, 2].map((i) => (
+   724→            <Skeleton key={i} className="h-10" />
+   725→          ))}
+   726→        </div>
+   727→      ) : (
+   728→        <Table>
+   729→          <TableHeader>
+   730→            <TableRow>
+   731→              <TableHead>User</TableHead>
+   732→              <TableHead>Amount</TableHead>
+   733→              <TableHead>Bank</TableHead>
+   734→              <TableHead>Account</TableHead>
+   735→              <TableHead>Status</TableHead>
+   736→              <TableHead>Date</TableHead>
+   737→              <TableHead className="text-right">Actions</TableHead>
+   738→            </TableRow>
+   739→          </TableHeader>
+   740→          <TableBody>
+   741→            {items.length === 0 ? (
+   742→              <TableRow>
+   743→                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+   744→                  No withdrawals.
+   745→                </TableCell>
+   746→              </TableRow>
+   747→            ) : (
+   748→              items.map((w) => (
+   749→                <TableRow key={w.id}>
+   750→                  <TableCell className="font-mono text-xs">{w.userId.slice(0, 8)}</TableCell>
+   751→                  <TableCell className="font-bold text-gold-deep">{formatETB(w.amount)}</TableCell>
+   752→                  <TableCell>{w.bankName}</TableCell>
+   753→                  <TableCell className="font-mono text-xs">
+   754→                    ••••{w.accountNumber.slice(-4)}
+   755→                  </TableCell>
+   756→                  <TableCell>
+   757→                    <StatusBadge
+   758→                      label={w.status}
+   759→                      tone={withdrawalStatusTone(w.status)}
+   760→                    />
+   761→                  </TableCell>
+   762→                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+   763→                    {formatDate(w.createdAt)}
+   764→                  </TableCell>
+   765→                  <TableCell className="text-right">
+   766→                    {w.status === "PENDING" ? (
+   767→                      <div className="flex justify-end gap-1">
+   768→                        <Button
+   769→                          size="sm"
+   770→                          variant="outline"
+   771→                          disabled={busyId === w.id}
+   772→                          onClick={() => act(w.id, "approve")}
+   773→                          className="rounded-full text-emerald-600"
+   774→                        >
+   775→                          <Check className="size-3.5" /> Approve
+   776→                        </Button>
+   777→                        <Button
+   778→                          size="sm"
+   779→                          variant="outline"
+   780→                          disabled={busyId === w.id}
+   781→                          onClick={() => act(w.id, "reject")}
+   782→                          className="rounded-full text-rose-600"
+   783→                        >
+   784→                          <X className="size-3.5" /> Reject
+   785→                        </Button>
+   786→                      </div>
+   787→                    ) : (
+   788→                      <span className="text-xs text-muted-foreground">—</span>
+   789→                    )}
+   790→                  </TableCell>
+   791→                </TableRow>
+   792→              ))
+   793→            )}
+   794→          </TableBody>
+   795→        </Table>
+   796→      )}
+   797→    </Card>
+   798→  );
+   799→}
+   800→
+   801→/* ============================================================ Users Tab */
+   802→function UsersTab() {
+   803→  const [users, setUsers] = useState<UserPublic[]>([]);
+   804→  const [loading, setLoading] = useState(true);
+   805→  const [busyId, setBusyId] = useState<string | null>(null);
+   806→
+   807→  const load = async () => {
+   808→    setLoading(true);
+   809→    try {
+   810→      const res = await adminApi.users();
+   811→      setUsers(res.users);
+   812→    } catch (err) {
+   813→      toast.error(err instanceof Error ? err.message : "Failed to load users");
+   814→    } finally {
+   815→      setLoading(false);
+   816→    }
+   817→  };
+   818→
+   819→  useEffect(() => {
+   820→    void load();
+   821→  }, []);
+   822→
+   823→  const setStatus = async (u: UserPublic, status: UserStatus) => {
+   824→    setBusyId(u.id);
+   825→    try {
+   826→      await adminApi.updateUser({ id: u.id, status });
+   827→      toast.success(`User ${status === "ACTIVE" ? "activated" : "suspended"}`);
+   828→      await load();
+   829→    } catch (err) {
+   830→      toast.error(err instanceof Error ? err.message : "Action failed");
+   831→    } finally {
+   832→      setBusyId(null);
+   833→    }
+   834→  };
+   835→
+   836→  const setRole = async (u: UserPublic, role: Role) => {
+   837→    setBusyId(u.id);
+   838→    try {
+   839→      await adminApi.updateUser({ id: u.id, status: u.status, role });
+   840→      toast.success(`Role set to ${role}`);
+   841→      await load();
+   842→    } catch (err) {
+   843→      toast.error(err instanceof Error ? err.message : "Action failed");
+   844→    } finally {
+   845→      setBusyId(null);
+   846→    }
+   847→  };
+   848→
+   849→  return (
+   850→    <Card className="p-0">
+   851→      {loading ? (
+   852→        <div className="space-y-2 p-4">
+   853→          {[0, 1, 2].map((i) => (
+   854→            <Skeleton key={i} className="h-10" />
+   855→          ))}
+   856→        </div>
+   857→      ) : (
+   858→        <Table>
+   859→          <TableHeader>
+   860→            <TableRow>
+   861→              <TableHead>Phone</TableHead>
+   862→              <TableHead>Name</TableHead>
+   863→              <TableHead>Role</TableHead>
+   864→              <TableHead>Status</TableHead>
+   865→              <TableHead>Balance</TableHead>
+   866→              <TableHead className="text-right">Actions</TableHead>
+   867→            </TableRow>
+   868→          </TableHeader>
+   869→          <TableBody>
+   870→            {users.length === 0 ? (
+   871→              <TableRow>
+   872→                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+   873→                  No users.
+   874→                </TableCell>
+   875→              </TableRow>
+   876→            ) : (
+   877→              users.map((u) => (
+   878→                <TableRow key={u.id}>
+   879→                  <TableCell className="font-mono text-xs">{u.phone}</TableCell>
+   880→                  <TableCell className="font-medium">{u.name ?? "—"}</TableCell>
+   881→                  <TableCell>
+   882→                    <Select
+   883→                      value={u.role}
+   884→                      onValueChange={(v) => setRole(u, v as Role)}
+   885→                      disabled={busyId === u.id}
+   886→                    >
+   887→                      <SelectTrigger className="h-8 w-28" size="sm">
+   888→                        <SelectValue />
+   889→                      </SelectTrigger>
+   890→                      <SelectContent>
+   891→                        <SelectItem value="USER">USER</SelectItem>
+   892→                        <SelectItem value="ADMIN">ADMIN</SelectItem>
+   893→                      </SelectContent>
+   894→                    </Select>
+   895→                  </TableCell>
+   896→                  <TableCell>
+   897→                    <StatusBadge
+   898→                      label={u.status}
+   899→                      tone={u.status === "ACTIVE" ? "green" : "red"}
+   900→                    />
+   901→                  </TableCell>
+   902→                  <TableCell className="font-semibold text-gold-deep">
+   903→                    {formatETB(u.balance)}
+   904→                  </TableCell>
+   905→                  <TableCell className="text-right">
+   906→                    <Button
+   907→                      size="sm"
+   908→                      variant="outline"
+   909→                      disabled={busyId === u.id}
+   910→                      onClick={() =>
+   911→                        setStatus(u, u.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE")
+   912→                      }
+   913→                      className="rounded-full"
+   914→                    >
+   915→                      {u.status === "ACTIVE" ? (
+   916→                        <>
+   917→                          <ShieldAlert className="size-3.5 text-rose-600" /> Suspend
+   918→                        </>
+   919→                      ) : (
+   920→                        <>
+   921→                          <BadgeCheck className="size-3.5 text-emerald-600" /> Activate
+   922→                        </>
+   923→                      )}
+   924→                    </Button>
+   925→                  </TableCell>
+   926→                </TableRow>
+   927→              ))
+   928→            )}
+   929→          </TableBody>
+   930→        </Table>
+   931→      )}
+   932→    </Card>
+   933→  );
+   934→}
+   935→
+   936→/* ============================================================ Main Admin View */
+   937→export function AdminView() {
+   938→  const [tab, setTab] = useState("reports");
+   939→
+   940→  const tabs = useMemo(
+   941→    () => [
+   942→      { value: "reports", label: "Reports", icon: <TrendingUp className="size-4" /> },
+   943→      { value: "products", label: "Products", icon: <Package className="size-4" /> },
+   944→      { value: "purchases", label: "Purchases", icon: <ShoppingCart className="size-4" /> },
+   945→      { value: "withdrawals", label: "Withdrawals", icon: <Wallet className="size-4" /> },
+   946→      { value: "users", label: "Users", icon: <Users className="size-4" /> },
+   947→    ],
+   948→    []
+   949→  );
+   950→
+   951→  return (
+   952→    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:py-12">
+   953→      <motion.div
+   954→        initial={{ opacity: 0, y: 8 }}
+   955→        animate={{ opacity: 1, y: 0 }}
+   956→        className="mb-6"
+   957→      >
+   958→        <div className="inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold-soft/40 px-3 py-1 text-xs font-medium text-gold-deep">
+   959→          <ShieldAlert className="size-3.5" /> Admin Console
+   960→        </div>
+   961→        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
+   962→          Platform <span className="text-gold-gradient">Overview</span>
+   963→        </h1>
+   964→      </motion.div>
+   965→
+   966→      <Tabs value={tab} onValueChange={setTab}>
+   967→        <div className="overflow-x-auto scroll-gold pb-1">
+   968→          <TabsList className="flex w-max">
+   969→            {tabs.map((t) => (
+   970→              <TabsTrigger key={t.value} value={t.value} className="gap-1.5">
+   971→                {t.icon}
+   972→                {t.label}
+   973→              </TabsTrigger>
+   974→            ))}
+   975→          </TabsList>
+   976→        </div>
+   977→        <TabsContent value="reports" className="mt-6">
+   978→          <ReportsTab />
+   979→        </TabsContent>
+   980→        <TabsContent value="products" className="mt-6">
+   981→          <ProductsTab />
+   982→        </TabsContent>
+   983→        <TabsContent value="purchases" className="mt-6">
+   984→          <PurchasesTab />
+   985→        </TabsContent>
+   986→        <TabsContent value="withdrawals" className="mt-6">
+   987→          <WithdrawalsTab />
+   988→        </TabsContent>
+   989→        <TabsContent value="users" className="mt-6">
+   990→          <UsersTab />
+   991→        </TabsContent>
+   992→      </Tabs>
+   993→    </div>
+   994→  );
+   995→}
+   996→
