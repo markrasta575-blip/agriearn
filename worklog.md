@@ -148,3 +148,23 @@ Work Log:
 Stage Summary:
 - Site is interactive and runnable end-to-end. Browser-verified.
 - Deliverables created: /database.sql (MySQL schema, 8 tables), /XAMPP_INSTALL.md (XAMPP + import guide), /FILE_MANIFEST.md (full file list).
+
+---
+Task ID: 7
+Agent: orchestrator (main)
+Task: Fix "register page not working".
+
+Work Log:
+- Reproduced in Agent Browser: clicking "Create Account" fired the native submit event and React's onSubmit, but NO network request was made.
+- Added a window-flag probe at the top of submit(); confirmed submit() DID run on click — so the handler fired; the problem was downstream in the request.
+- Root cause: in src/lib/api.ts, `authApi.register` and `authApi.login` passed only `{ json: body }` to the request helper WITHOUT `method: "POST"`. fetch defaults omitted method to GET, so the call hit the POST-only route handlers and returned 405. (Other endpoints like purchases/withdrawals already had `method: "POST"` and worked.)
+- Fix: added `method: "POST"` to both register and login calls in src/lib/api.ts.
+- Reverted the earlier (mis-diagnosed) AuthView changes (button onClick / onKeyDown / optional event); AuthForm is back to the clean form+onSubmit pattern, which works correctly now that the request method is correct.
+- Verified end-to-end in Agent Browser:
+  - Register: typed name/phone/password, clicked Create Account -> POST /api/auth/register 200 -> dialog closed -> redirected to Dashboard (authenticated).
+  - New user persisted in DB: phone 0988877766, name "New Member", role USER, status ACTIVE.
+  - Login: typed phone/password, clicked Sign In -> POST /api/auth/login 200 -> authenticated.
+- `bun run lint` PASS. dev.log: no errors.
+
+Stage Summary:
+- Single-line-class root cause (missing HTTP method on register/login). Both auth flows now work via the form.

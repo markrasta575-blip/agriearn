@@ -55,9 +55,15 @@ async function request<T>(
 /* ------------------------------------------------------------------ Auth */
 export const authApi = {
   register: (body: { phone: string; password: string; name?: string }) =>
-    request<{ user: UserPublic }>("/api/auth/register", { json: body }),
+    request<{ user: UserPublic }>("/api/auth/register", {
+      method: "POST",
+      json: body,
+    }),
   login: (body: { phone: string; password: string }) =>
-    request<{ user: UserPublic }>("/api/auth/login", { json: body }),
+    request<{ user: UserPublic }>("/api/auth/login", {
+      method: "POST",
+      json: body,
+    }),
   logout: () => request<Record<string, never>>("/api/auth/logout", {
     method: "POST",
   }),
