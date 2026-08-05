@@ -280,3 +280,30 @@ Work Log:
 
 Stage Summary:
 - Dashboard upgraded to 11 sections with real data. Green + gold theme on white. 3 charts. Responsive. Quick actions wired. Referral link copyable. Notifications derived from live transactions.
+
+---
+Task ID: 12
+Agent: orchestrator (main)
+Task: Fix Dashboard loading issue — remove "Dashboard unavailable" error, always show dashboard with zeros.
+
+Work Log:
+- Root-cause investigation: dashboard API returns 401 without session (expected) and 200 with session. Existing + new users both load fine (verified). The "Dashboard unavailable" EmptyState only appeared when the API call threw (e.g., session expired, network drop) — DashboardView rendered a full-screen error instead of zeros.
+- Note: this is a Next.js 16 + TypeScript + Prisma project. There is NO PHP. SQL schema lives in /database.sql.
+- Fix 1 — src/app/api/dashboard/route.ts: wrapped accrueForUser(user.id) in a nested try/catch so an accrual failure is non-fatal (logged, then continues). The dashboard API now always returns valid JSON for a logged-in user (zeros if no records).
+- Fix 2 — src/components/earning/DashboardView.tsx:
+  - Added FALLBACK_STATS + FALLBACK_DATA constants (all zeros, empty arrays).
+  - Removed the `if (!data)` "Dashboard unavailable" EmptyState block entirely (requirement #8).
+  - Now uses `const safeData = data ?? FALLBACK_DATA` so the full dashboard ALWAYS renders (with zeros when no data / API error) (requirements #9, #10).
+  - Added an `apiError` state + non-blocking amber retry banner at the top (with Retry button) shown ONLY when the API actually failed — the dashboard still renders below it (requirement #7).
+  - Refactored the loader into `loadDashboard()` (reusable by Retry).
+  - Removed unused LayoutDashboard import.
+- Verification (Agent Browser):
+  - Normal load (existing user): dashboard shows real data (700/350 ETB). "Dashboard unavailable" count = 0.
+  - Blocked dashboard API (simulated failure): dashboard shows zeros + amber Retry banner (NOT the error screen). "Dashboard unavailable" count = 0.
+  - Clicked Retry after unblocking: real data restored (700/350 ETB), banner disappeared.
+  - Brand-new user (no records): "Welcome, Zero User" with 0 ETB everywhere, no error.
+  - VLM confirmed working dashboard with zeros, no error.
+- `bun run lint` PASS (0 errors, 0 warnings); dev.log clean.
+
+Stage Summary:
+- "Dashboard unavailable" message is removed permanently. Dashboard always renders: Available Balance, Today's Earnings, Total Earnings, Active Products, Withdrawal Balance, Recent Transactions (zeros when no data). On API failure, a non-blocking Retry banner appears instead of blocking the page. Accrual failures are non-fatal. No existing features changed.

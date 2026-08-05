@@ -76,7 +76,14 @@ function toTransactionPublic(t: {
 export async function GET() {
   try {
     const user = await requireUser();
-    await accrueForUser(user.id);
+    // Accrual is best-effort: a failure here must NOT break the dashboard.
+    // The dashboard should always return valid JSON (zeros if no data).
+    try {
+      await accrueForUser(user.id);
+    } catch (accrualErr) {
+      // Log and continue — we still return whatever data we can.
+      console.error("[dashboard] accrual failed (non-fatal):", accrualErr);
+    }
 
     const today = utcDay(new Date());
     const sevenDaysAgo = new Date(today.getTime() - 6 * DAY_MS);

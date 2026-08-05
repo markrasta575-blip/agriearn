@@ -21,7 +21,6 @@ import {
   PiggyBank,
   ArrowUpRight,
   ArrowDownRight,
-  LayoutDashboard,
   Sparkles,
   Copy,
   Gift,
@@ -38,6 +37,7 @@ import {
   Plus,
   Clock,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,28 +70,65 @@ interface NotificationItem {
   when: string;
 }
 
+// Default dashboard data used when the API has no records OR the request
+// fails. This guarantees the dashboard ALWAYS renders with zeros instead of
+// an error screen (requirements: show zeros, never show "unavailable").
+const FALLBACK_STATS = {
+  currentBalance: 0,
+  dailyEarnings: 0,
+  totalEarnings: 0,
+  activeProducts: 0,
+  withdrawalBalance: 0,
+  pendingWithdrawals: 0,
+  totalWithdrawn: 0,
+  weeklyIncome: 0,
+  monthlyIncome: 0,
+  totalInvestment: 0,
+};
+
+const FALLBACK_DATA: DashboardResponse = {
+  stats: FALLBACK_STATS,
+  recentTransactions: [],
+  activePurchases: [],
+  earnings7d: [],
+  earningsByMonth: [],
+  investmentTrend: [],
+};
+
 export function DashboardView() {
   const { user, setView } = useStore();
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState(false);
 
-  useEffect(() => {
+  const loadDashboard = async () => {
     let active = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await dashboardApi.get();
-        if (active) setData(res);
-      } catch (err) {
-        if (active) {
-          toast.error(err instanceof Error ? err.message : "Failed to load dashboard");
-        }
-      } finally {
-        if (active) setLoading(false);
+    setLoading(true);
+    setApiError(false);
+    try {
+      const res = await dashboardApi.get();
+      if (active) setData(res);
+    } catch (err) {
+      if (active) {
+        setApiError(true);
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Couldn't reach the dashboard. Showing cached/zero values."
+        );
       }
-    })();
+    } finally {
+      if (active) setLoading(false);
+    }
     return () => {
       active = false;
+    };
+  };
+
+  useEffect(() => {
+    const cleanup = loadDashboard();
+    return () => {
+      cleanup.then((fn) => fn?.());
     };
   }, []);
 
@@ -168,27 +205,13 @@ export function DashboardView() {
     );
   }
 
-  if (!data) {
-    return (
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
-        <EmptyState
-          icon={<LayoutDashboard className="size-6" />}
-          title="Dashboard unavailable"
-          description="We couldn't load your dashboard. Please try again."
-          action={
-            <Button
-              onClick={() => window.location.reload()}
-              className="bg-gold-gradient text-primary-foreground rounded-full"
-            >
-              Retry
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
+  // IMPORTANT: we never show an "unavailable" error screen. If the API failed
+  // or there is no data yet, we render the full dashboard with fallback zero
+  // values so the user always sees their dashboard (with a retry banner when
+  // the API actually errored).
+  const safeData = data ?? FALLBACK_DATA;
 
-  const { stats, recentTransactions, activePurchases, earnings7d, earningsByMonth, investmentTrend } = data;
+  const { stats, recentTransactions, activePurchases, earnings7d, earningsByMonth, investmentTrend } = safeData;
   const dailyChart = earnings7d.map((e) => ({ date: shortDate(e.date), total: e.total }));
   const hasActive = activePurchases.length > 0;
   const todayStr = new Date().toLocaleDateString("en-US", {
@@ -202,6 +225,31 @@ export function DashboardView() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:py-10">
+      {/* Non-blocking retry banner (only when the API actually errored) */}
+      {apiError && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-50 p-4 text-sm sm:flex-row sm:items-center"
+        >
+          <div className="flex items-start gap-2">
+            <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <span className="text-amber-800">
+              We couldn&rsquo;t refresh your latest figures. Showing saved/zero
+              values below.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void loadDashboard()}
+            className="shrink-0 rounded-full border-amber-500/40 text-amber-700 hover:bg-amber-100"
+          >
+            <RefreshCw className="size-3.5" /> Retry
+          </Button>
+        </motion.div>
+      )}
+
       {/* 1. Welcome hero + 9. Quick Actions */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
