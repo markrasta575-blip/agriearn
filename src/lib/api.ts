@@ -142,6 +142,8 @@ export interface DashboardResponse {
   recentTransactions: TransactionPublic[];
   activePurchases: PurchasePublic[];
   earnings7d: { date: string; total: number }[];
+  earningsByMonth: { month: string; total: number }[];
+  investmentTrend: { month: string; total: number }[];
 }
 export const dashboardApi = {
   get: () =>

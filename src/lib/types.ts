@@ -99,6 +99,11 @@ export interface DashboardStats {
   activeProducts: number;
   withdrawalBalance: number;
   pendingWithdrawals: number;
+  // Enhanced dashboard metrics
+  totalWithdrawn: number;
+  weeklyIncome: number;
+  monthlyIncome: number;
+  totalInvestment: number;
 }
 
 export interface AdminReport {

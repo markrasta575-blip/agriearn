@@ -241,3 +241,42 @@ Work Log:
 
 Stage Summary:
 - Corn Investment Package added (3,500 ETB, 350 ETB/day). Both products displayed as cards with Status + View Details + yellow Buy Now. Green accents added alongside gold. Full purchase->approve->earn flow verified for Corn. No existing features removed.
+
+---
+Task ID: 11
+Agent: orchestrator (main)
+Task: Upgrade User Dashboard with modern professional design (11 sections). Do not remove existing features.
+
+Work Log:
+- Extended src/lib/types.ts DashboardStats: added totalWithdrawn, weeklyIncome, monthlyIncome, totalInvestment.
+- Extended src/app/api/dashboard/route.ts: added aggregations for total withdrawn (approved withdrawals), weekly income (7d earnings), monthly income (30d earnings), total investment (ACTIVE+COMPLETED purchase prices), 6-month earnings buckets (earningsByMonth), and cumulative investment trend (investmentTrend, 6 months). All existing fields preserved.
+- Updated src/lib/api.ts DashboardResponse to include earningsByMonth + investmentTrend.
+- Rewrote src/components/earning/DashboardView.tsx with all 11 sections:
+  1. Welcome hero — "Welcome, [Name]" + today's date (full) + User ID (last 8 chars) + green/gold gradient card.
+  2. Balance Cards — Available Balance, Total Earnings, Today's Earnings, Total Withdrawn (4 StatCards).
+  3. Active Products — image, name, purchase price, daily earnings, purchase date, active-since date, ACTIVE status.
+  4. Earnings Summary — Daily / Weekly / Monthly / Total income tiles.
+  5. Recent Transactions — table (type, description, amount +/-, status, date) covering deposits/purchases/earnings/withdrawals.
+  6. Referral Section — referral link (derived from user.id, copyable), Total Referrals, Referral Bonus, Copy button.
+  7. Withdrawal Section — current withdrawal balance, min-300 note, Withdraw Now button (disabled if balance<300).
+  8. Notifications — derived from transactions: daily earnings received, payment approved, withdrawal approved, new product announcement.
+  9. Quick Actions — Buy Product, Withdraw, My Products, Profile, Support (gold/green/outline buttons).
+  10. Statistics Charts — Daily Earnings (7d area, gold), Monthly Earnings (6m bar, green), Total Investment (6m cumulative area, green).
+  11. Design — white bg + green & gold accents, rounded cards, framer-motion animations, responsive grid, custom scrollbar.
+- Agent Browser verification (all green):
+  - Dashboard API returns all new fields (totalWithdrawn, weeklyIncome=700, monthlyIncome=700, totalInvestment=3500, earningsByMonth[6], investmentTrend[6]).
+  - Welcome: "Welcome, New Member" + full date + User ID visible.
+  - 4 balance cards with real values (700 / 700 / 350 / 0 ETB).
+  - 3 charts render (recharts-surface count = 3).
+  - Earnings summary tiles (350/700/700/700 ETB).
+  - Active product: Corn Investment Package, 3,500 ETB, 350 ETB/day, ACTIVE, Purchased + Active-since dates.
+  - Withdrawal section + Withdraw Now button (navigates to Withdrawal page).
+  - Referral section with copyable link http://localhost:3000/?ref=<userId>.
+  - Notifications: daily earnings received, payment approved, new product available.
+  - Quick actions: Buy Product (navigates to product page), Withdraw, My Products, Profile, Support all present.
+  - Mobile (390x844): responsive single-column, readable.
+  - VLM confirmed all 11 sections + green/gold theme + professional modern UI on both desktop and mobile.
+- `bun run lint` PASS; dev.log clean. No existing functions removed; all prior data still works.
+
+Stage Summary:
+- Dashboard upgraded to 11 sections with real data. Green + gold theme on white. 3 charts. Responsive. Quick actions wired. Referral link copyable. Notifications derived from live transactions.

@@ -80,15 +80,25 @@ export async function GET() {
 
     const today = utcDay(new Date());
     const sevenDaysAgo = new Date(today.getTime() - 6 * DAY_MS);
+    const thirtyDaysAgo = new Date(today.getTime() - 29 * DAY_MS);
+    const sixMonthsAgo = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 5, 1)
+    );
 
     const [
       earningsSum,
       dailyEarningsSum,
+      weeklyEarningsSum,
+      monthlyEarningsSum,
       activeProductsCount,
       pendingWithdrawalsCount,
+      totalWithdrawnAgg,
+      totalInvestmentAgg,
       recentTransactionsRaw,
       activePurchasesRaw,
       last7dEarnings,
+      last6mEarnings,
+      allPurchasesForTrend,
       refreshedUser,
     ] = await Promise.all([
       db.earning.aggregate({
@@ -102,11 +112,33 @@ export async function GET() {
           date: { gte: today },
         },
       }),
+      db.earning.aggregate({
+        _sum: { amount: true },
+        where: {
+          userId: user.id,
+          date: { gte: sevenDaysAgo },
+        },
+      }),
+      db.earning.aggregate({
+        _sum: { amount: true },
+        where: {
+          userId: user.id,
+          date: { gte: thirtyDaysAgo },
+        },
+      }),
       db.purchase.count({
         where: { userId: user.id, status: "ACTIVE" },
       }),
       db.withdrawal.count({
         where: { userId: user.id, status: "PENDING" },
+      }),
+      db.withdrawal.aggregate({
+        _sum: { amount: true },
+        where: { userId: user.id, status: "APPROVED" },
+      }),
+      db.purchase.aggregate({
+        _sum: { price: true },
+        where: { userId: user.id, status: { in: ["ACTIVE", "COMPLETED"] } },
       }),
       db.transaction.findMany({
         where: { userId: user.id },
@@ -125,6 +157,18 @@ export async function GET() {
         },
         select: { amount: true, date: true },
       }),
+      db.earning.findMany({
+        where: {
+          userId: user.id,
+          date: { gte: sixMonthsAgo },
+        },
+        select: { amount: true, date: true },
+      }),
+      db.purchase.findMany({
+        where: { userId: user.id },
+        select: { price: true, createdAt: true, status: true },
+        orderBy: { createdAt: "asc" },
+      }),
       db.user.findUnique({ where: { id: user.id } }),
     ]);
 
@@ -137,6 +181,10 @@ export async function GET() {
       activeProducts: activeProductsCount,
       withdrawalBalance: balance,
       pendingWithdrawals: pendingWithdrawalsCount,
+      totalWithdrawn: totalWithdrawnAgg._sum.amount ?? 0,
+      weeklyIncome: weeklyEarningsSum._sum.amount ?? 0,
+      monthlyIncome: monthlyEarningsSum._sum.amount ?? 0,
+      totalInvestment: totalInvestmentAgg._sum.price ?? 0,
     };
 
     // Build 7-day earnings buckets.
@@ -152,6 +200,39 @@ export async function GET() {
       earnings7d.push({ date: key, total: bucketMap.get(key) ?? 0 });
     }
 
+    // Build 6-month earnings buckets.
+    const earningsByMonth: { month: string; total: number }[] = [];
+    const monthMap = new Map<string, number>();
+    for (const e of last6mEarnings) {
+      const d = new Date(e.date);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      monthMap.set(key, (monthMap.get(key) ?? 0) + e.amount);
+    }
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - i, 1));
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+      earningsByMonth.push({ month: label, total: monthMap.get(key) ?? 0 });
+    }
+
+    // Build cumulative investment trend (by month, last 6 months).
+    const investmentTrend: { month: string; total: number }[] = [];
+    const invMonthMap = new Map<string, number>();
+    for (const p of allPurchasesForTrend) {
+      if (p.status === "REJECTED") continue;
+      const d = new Date(p.createdAt);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      invMonthMap.set(key, (invMonthMap.get(key) ?? 0) + p.price);
+    }
+    let cumulative = 0;
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - i, 1));
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      cumulative += invMonthMap.get(key) ?? 0;
+      const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+      investmentTrend.push({ month: label, total: cumulative });
+    }
+
     return NextResponse.json({
       ok: true,
       data: {
@@ -159,6 +240,8 @@ export async function GET() {
         recentTransactions: recentTransactionsRaw.map(toTransactionPublic),
         activePurchases: activePurchasesRaw.map(toPurchasePublic),
         earnings7d,
+        earningsByMonth,
+        investmentTrend,
       },
     });
   } catch (err) {
