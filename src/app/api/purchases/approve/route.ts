@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { handleError } from "@/lib/http";
+import { processPurchaseActivationRewards } from "@/lib/referral";
 import type { PurchasePublic } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +77,26 @@ export async function POST(req: Request) {
         },
         data: { status: "COMPLETED" },
       });
+    }
+
+    // Pay referral + welcome-bonus rewards for this activation. Idempotent +
+    // non-fatal: any failure is logged inside the helper but never rethrown.
+    try {
+      await processPurchaseActivationRewards({
+        id: purchase.id,
+        userId: purchase.userId,
+        price: purchase.price,
+        status: purchase.status,
+        activationDate: purchase.activationDate,
+        product: purchase.product
+          ? { name: purchase.product.name }
+          : null,
+      });
+    } catch (rewardErr) {
+      console.error(
+        `[purchases/approve] reward processing failed (non-fatal) for ${purchase.id}:`,
+        rewardErr
+      );
     }
 
     return NextResponse.json({ ok: true, data: { purchase: toPublic(purchase) } });

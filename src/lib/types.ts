@@ -84,7 +84,7 @@ export interface BankAccountPublic {
 export interface TransactionPublic {
   id: string;
   userId: string;
-  type: "EARNING" | "WITHDRAWAL" | "PURCHASE";
+  type: "EARNING" | "WITHDRAWAL" | "PURCHASE" | "BONUS" | "REFERRAL";
   amount: number;
   status: "PENDING" | "COMPLETED" | "FAILED" | "REJECTED";
   description: string | null;
@@ -122,4 +122,82 @@ export interface ApiResponse<T> {
   ok: boolean;
   data?: T;
   error?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Referral system
+// ---------------------------------------------------------------------------
+
+export interface ReferralSettingsPublic {
+  enabled: boolean;
+  referralReward: number;
+  welcomeBonus: number;
+  qualifyingPrice: number;
+}
+
+export interface ReferralStats {
+  totalReferrals: number;
+  activeReferrals: number;
+  referralEarnings: number;
+}
+
+export interface ReferralHistoryItem {
+  id: string;
+  event: string;
+  amount: number;
+  relatedId: string | null;
+  createdAt: string;
+}
+
+export interface ReferredUserPublic {
+  id: string;
+  referredName: string | null;
+  referredPhone: string;
+  status: string;
+  createdAt: string;
+  rewardedAt: string | null;
+}
+
+export interface ReferralResponse {
+  code: string;
+  referralLink: string;
+  stats: ReferralStats;
+  history: ReferralHistoryItem[];
+  referred: ReferredUserPublic[];
+  settings: ReferralSettingsPublic;
+}
+
+export interface AdminReferralRewardPublic {
+  id: string;
+  referrerPhone: string;
+  referrerName: string | null;
+  referredPhone: string;
+  amount: number;
+  purchaseId: string;
+  createdAt: string;
+}
+
+export interface AdminReferralPublic {
+  id: string;
+  referrerPhone: string;
+  referrerName: string | null;
+  referredPhone: string;
+  referredName: string | null;
+  referralCode: string;
+  status: string;
+  createdAt: string;
+  rewardedAt: string | null;
+}
+
+export interface AdminReferralReport {
+  referrals: AdminReferralPublic[];
+  rewards: AdminReferralRewardPublic[];
+  settings: ReferralSettingsPublic;
+  stats: {
+    totalReferrals: number;
+    totalRewardsPaid: number;
+    totalRewardsAmount: number;
+    totalWelcomeBonuses: number;
+    totalWelcomeBonusAmount: number;
+  };
 }

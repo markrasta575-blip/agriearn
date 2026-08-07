@@ -1,7 +1,7 @@
 // Zustand store for the Earning Platform SPA.
 import { create } from "zustand";
 import type { UserPublic } from "@/lib/types";
-import { authApi } from "@/lib/api";
+import { authApi, referralsApi } from "@/lib/api";
 
 export type ViewKey =
   | "product"
@@ -9,7 +9,8 @@ export type ViewKey =
   | "myproducts"
   | "withdrawal"
   | "admin"
-  | "payment";
+  | "payment"
+  | "referral";
 
 interface AppState {
   user: UserPublic | null;
@@ -56,7 +57,19 @@ export const useStore = create<AppState>((set) => ({
   },
 }));
 
-// Initialize user on first load (client-only).
+// Track a referral code from the URL (?ref=CODE) so the server stores it in a
+// cookie; it is then attached to the user when they register. Also initialize
+// the logged-in user on first load (client-only).
 if (typeof window !== "undefined") {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      // Fire-and-forget — the server sets a `pending_ref` cookie (30 days).
+      void referralsApi.track(ref).catch(() => {});
+    }
+  } catch {
+    // ignore
+  }
   void useStore.getState().refreshUser();
 }

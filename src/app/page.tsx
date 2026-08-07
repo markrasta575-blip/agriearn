@@ -11,6 +11,7 @@ import { PaymentView } from "@/components/earning/PaymentView";
 import { DashboardView } from "@/components/earning/DashboardView";
 import { MyProductsView } from "@/components/earning/MyProductsView";
 import { WithdrawalView } from "@/components/earning/WithdrawalView";
+import { ReferralView } from "@/components/earning/ReferralView";
 import { AdminView } from "@/components/earning/AdminView";
 import { Loader2 } from "lucide-react";
 
@@ -34,6 +35,8 @@ export default function Home() {
         return user ? <DashboardView /> : <ProductView />;
       case "myproducts":
         return user ? <MyProductsView /> : <ProductView />;
+      case "referral":
+        return user ? <ReferralView /> : <ProductView />;
       case "withdrawal":
         return user ? <WithdrawalView /> : <ProductView />;
       case "admin":

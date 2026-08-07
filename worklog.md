@@ -307,3 +307,86 @@ Work Log:
 
 Stage Summary:
 - "Dashboard unavailable" message is removed permanently. Dashboard always renders: Available Balance, Today's Earnings, Total Earnings, Active Products, Withdrawal Balance, Recent Transactions (zeros when no data). On API failure, a non-blocking Retry banner appears instead of blocking the page. Accrual failures are non-fatal. No existing features changed.
+
+---
+Task ID: 2-referral-backend
+Agent: full-stack-developer (backend)
+Task: Referral System backend — schema models, reward engine, registration hook, approve-route hook, user-facing /api/referrals + /api/referrals/track, admin /api/admin/referrals, shared types, seed.
+
+Work Log:
+- Files created:
+  - src/lib/referral.ts                      — reward engine + helpers:
+      - generateReferralCode(): 8-char uppercase alphanumeric (no O/0/I/1/L), crypto.randomBytes.
+      - ensureReferralCode(userId): lazy-set a user's referralCode with P2002-retry loop.
+      - getReferralSettings(): single-row upsert (id "settings-single"); returns defaults if anything fails.
+      - processPurchaseActivationRewards(purchase): idempotent + non-fatal. Pays (a) welcome bonus to buyer (BonusHistory unique on (userId,"WELCOME")), (b) referral reward to referrer (ReferralReward unique on referredId). Each block wrapped in db.$transaction; P2002 swallowed. Welcome bonus is INDEPENDENT of the referral program toggle; referral reward only pays when settings.enabled && price >= qualifyingPrice.
+  - src/app/api/referrals/route.ts           — GET: returns code/link/stats/history/referred/settings. ensureReferralCode lazy-sets the code. referralLink = `${origin}/?ref=${code}` (origin from request URL).
+  - src/app/api/referrals/track/route.ts     — GET: read pending_ref cookie; POST {code}: validate (<=12 chars A-Z0-9), set httpOnly cookie (30 days).
+  - src/app/api/admin/referrals/route.ts     — GET (admin): referrals + rewards (referrer + referred joined manually since ReferralReward has no User.referred relation) + settings + KPI stats. POST (admin): upsert settings (enabled / referralReward / welcomeBonus / qualifyingPrice; numbers > 0).
+- Files edited (additive only — no existing logic removed):
+  - prisma/schema.prisma                     — added User.referralCode (unique, nullable) + back-relations (referralsMade, referredBy, referralRewards, bonusHistory, referralHistory). Added models Referral, ReferralReward (unique on referredId), BonusHistory (unique on (userId,type)), ReferralHistory, ReferralSetting. Extended Transaction.type comment to include "BONUS" | "REFERRAL".
+  - src/lib/types.ts                         — added ReferralSettingsPublic, ReferralStats, ReferralHistoryItem, ReferredUserPublic, ReferralResponse, AdminReferralRewardPublic, AdminReferralPublic, AdminReferralReport. EXTENDED TransactionPublic["type"] union to "EARNING" | "WITHDRAWAL" | "PURCHASE" | "BONUS" | "REFERRAL" (no other fields changed).
+  - src/app/api/auth/register/route.ts       — accept optional body.referralCode; fall back to cookies().get('pending_ref').value; if a User with that referralCode exists AND id !== new user's id, create Referral {PENDING} + ReferralHistory(REFERRED_REGISTERED). P2002 (already referred) swallowed. ALL existing register logic + toPublic response shape preserved.
+  - src/app/api/purchases/approve/route.ts   — after the existing ACTIVE update + PURCHASE tx flip, call processPurchaseActivationRewards(purchase) inside try/catch (failures logged, never break approval). Response shape unchanged.
+  - scripts/seed.ts                           — after existing product seeding: upsert ReferralSetting (id "settings-single", enabled=true, referralReward=200, welcomeBonus=100, qualifyingPrice=2000); backfill referralCode for any existing User with referralCode=null via ensureReferralCode.
+
+End-to-end verification (curl, all green):
+  - GET /api/referrals (admin) -> code "SE64ZE2H", stats {0/0/0}, settings {200/100/2000}.
+  - POST /api/admin/referrals {referralReward:250, welcomeBonus:150} -> settings updated. Reset.
+  - POST /api/admin/referrals {enabled:false} -> settings.enabled=false. Re-enabled.
+  - Register user "Referral Test User" with body.referralCode=SE64ZE2H -> Referral{PENDING} created + REFERRED_REGISTERED history.
+  - User buys Wheat (2000 ETB, qualifying) -> admin approves -> admin balance +200 (REFERRAL tx), user balance +100 (BONUS tx "Welcome Bonus"). Referral status -> REWARDED.
+  - Re-approve same purchase -> balances unchanged (idempotent).
+  - Disable program; user2 buys Wheat -> approve -> admin balance unchanged (200), user2 balance +100 (welcome bonus INDEPENDENT of referral toggle). ✓
+  - POST /api/referrals/track {code:"se64ze2h"} -> cookie set; GET returns "SE64ZE2H"; register user3 with NO body.referralCode -> user3 attached to admin via cookie fallback. ✓
+  - /api/referrals (admin) shows 3 referrals: REWARDED (user1), PENDING (user2 disabled), PENDING (user3 cookie).
+
+Key decisions:
+- ReferralReward schema intentionally has NO User.referred relation — only referrer. The referred user is resolved in /api/admin/referrals via a manual user.findMany on the referredId set. (The schema spec said: "Keep it simple: ReferralReward has referrer relation only.")
+- ensureReferralCode lazy-sets the code on first /api/referrals GET — required because existing users (created before this task) have referralCode=null until they visit /api/referrals OR the seed runs.
+- Welcome bonus is paid on EVERY qualifying purchase approval (once per account via BonusHistory @@unique([userId,"WELCOME"])). The spec calls it "once per account" so even if a user buys multiple qualifying packages, only the first triggers the welcome bonus.
+- Referral reward paid ONCE per referred user (ReferralReward @@unique([referredId])) — the FIRST qualifying purchase by that user pays the referrer. Subsequent qualifying purchases by the same user do NOT pay again.
+- If settings.enabled=false, referral rewards are NOT paid (welcome bonus still is). Documented in src/lib/referral.ts header comment.
+- Cookie "pending_ref" is httpOnly (so client JS can't read it; only the server-side register route reads it). The frontend passes referralCode explicitly in the register body OR relies on the cookie fallback.
+- processPurchaseActivationRewards catches its own errors and never rethrows — activation must NEVER fail because a reward payout broke.
+- Status mapping unchanged: 401 UNAUTHORIZED, 403 FORBIDDEN/SUSPENDED, 404 P2025, 409 P2002, 400 validation, 500 unexpected.
+
+Lint status: `bun run lint` PASS (0 errors, 0 warnings) for every backend file. (No new errors introduced.)
+DB push status: `bun run db:push` succeeded; Prisma client regenerated.
+
+Stage Summary:
+- 4 new backend files + 5 edited files (schema, types, register, approve, seed).
+- Reward engine is idempotent (DB-level @@unique constraints + check-before-insert) and non-fatal (failures logged, never block activation).
+- All 4 referral endpoints (GET /api/referrals, GET/POST /api/referrals/track, GET/POST /api/admin/referrals) verified working end-to-end via curl.
+- Register route contract preserved (toPublic shape, session creation, validation) — orchestrator's frontend code that calls /api/auth/register still works unchanged; the only addition is the optional referralCode field.
+
+Note on dev server: I had to restart the running dev server (the Prisma client was stale after `prisma generate` because the Next.js dev server caches PrismaClient in globalThis per src/lib/db.ts). I restarted it via `(nohup node .../next dev -p 3000 </dev/null >log 2>&1 &)` so it survives the bash session. After restart, all routes work correctly with the new Prisma client.
+
+---
+Task ID: 13-referral-frontend
+Agent: orchestrator (main)
+Task: Build the complete Referral System frontend (page, nav, dashboard cards, admin tab, transaction types) on top of the referral backend.
+
+Work Log:
+- src/lib/api.ts: import referral types; authApi.register now accepts optional `referralCode`; added `referralsApi` (get/track/getPending) + `adminReferralsApi` (get/update) + `AdminReferralSettingsPayload`.
+- src/lib/store.ts: added `referral` to ViewKey; on mount, parse `?ref=CODE` from URL and fire `referralsApi.track(code)` so the server stores a `pending_ref` cookie (used at register time as fallback).
+- src/components/earning/Header.tsx: added "Referral" nav item (Gift icon, requiresLogin).
+- src/app/page.tsx: render `<ReferralView />` for `case "referral"`.
+- src/components/earning/ReferralView.tsx (NEW): full referral page — referral code + copy, referral link + copy, share via Telegram/WhatsApp/Facebook, stat cards (Total Referrals / Active Referrals / Referral Earnings), referred-users table (friend, status, date), referral history list.
+- src/components/earning/DashboardView.tsx: fetch referral data in parallel with dashboard; replaced static zeros with real `referral.stats`; referral section now shows Total/Active/Earnings + real link + Copy + "View details" (goes to Referral page); added referral-reward + welcome-bonus notifications derived from transactions.
+- src/components/earning/AdminView.tsx: added "Referrals" tab with `ReferralsTab` — KPI cards (Total Referrals, Rewards Paid, Rewards Amount, Welcome Bonuses), Program Settings (enable/disable toggle + referralReward/welcomeBonus/qualifyingPrice inputs + Save), "All Referrals" table (referrer, referred, code, status, dates), "All Referral Rewards" table.
+
+End-to-end verification (Agent Browser + curl):
+- Admin code SE64ZE2H; settings 200/100/2000.
+- Registered new user 0944445555 with referralCode SE64ZE2H -> Referral(PENDING) created.
+- User bought Wheat (2000 ETB) -> PENDING_APPROVAL.
+- Admin approved -> admin balance 200->400 (+200 REFERRAL), buyer balance 0->100 (+100 BONUS "Welcome Bonus").
+- Re-approving same purchase -> balances UNCHANGED (idempotent, no duplicate reward).
+- Referral page: shows code, link, share buttons, 1 total / 1 active / 200 ETB earnings, referred user "Referred User / 0944445555" with Rewarded status, history "Referral reward earned" + "Friend registered with your code".
+- Dashboard referral cards show real stats + Copy + View details.
+- Admin Referrals tab: KPIs, settings inputs (200/100/2000), Enable/Disable toggle works, Save persists (changed 200->250->200 verified via API), All Referrals + All Rewards tables populate.
+- VLM confirmed referral page has all elements with white + green/gold theme.
+- `bun run lint` PASS; dev.log clean. No existing features removed.
+
+Stage Summary:
+- Complete referral system live: referral page in nav, reward rules (referrer +200 after referred 2000-ETB purchase approved; buyer +100 welcome bonus once), dashboard cards, admin panel (view all, toggle, change amounts), transaction recording (REFERRAL +200, BONUS +100), security (no duplicate rewards, no self-referral, paid only after approval). database.sql to be updated with the 5 new tables in a follow-up.

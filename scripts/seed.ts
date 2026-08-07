@@ -2,6 +2,10 @@
 // Run with: bun run scripts/seed.ts
 import { db } from "../src/lib/db";
 import { hashPassword } from "../src/lib/crypto";
+import {
+  ensureReferralCode,
+  SETTINGS_SINGLE_ID,
+} from "../src/lib/referral";
 
 async function main() {
   // Admin user
@@ -116,6 +120,40 @@ async function main() {
 
   console.log("\nSeeding complete.");
   console.log("Admin login  -> phone: 0990000000  password: admin123");
+
+  // Referral settings (single row, id "settings-single").
+  const settings = await db.referralSetting.upsert({
+    where: { id: SETTINGS_SINGLE_ID },
+    update: {},
+    create: {
+      id: SETTINGS_SINGLE_ID,
+      enabled: true,
+      referralReward: 200,
+      welcomeBonus: 100,
+      qualifyingPrice: 2000,
+    },
+  });
+  console.log(
+    "✓ Referral settings: enabled=",
+    settings.enabled,
+    " referralReward=",
+    settings.referralReward,
+    " welcomeBonus=",
+    settings.welcomeBonus,
+    " qualifyingPrice=",
+    settings.qualifyingPrice
+  );
+
+  // Backfill referral codes for any existing users (idempotent — skips users
+  // that already have one).
+  const users = await db.user.findMany({
+    where: { referralCode: null },
+    select: { id: true, phone: true },
+  });
+  for (const u of users) {
+    const code = await ensureReferralCode(u.id);
+    console.log("✓ Referral code for", u.phone, "->", code);
+  }
 }
 
 main()

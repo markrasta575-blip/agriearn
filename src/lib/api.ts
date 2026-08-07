@@ -2,11 +2,14 @@
 // All URLs are relative (e.g. "/api/products"). No absolute URLs / ports.
 import type {
   AdminReport,
+  AdminReferralReport,
   BankAccountPublic,
   DashboardStats,
   EarningPublic,
   ProductPublic,
   PurchasePublic,
+  ReferralResponse,
+  ReferralSettingsPublic,
   Role,
   TransactionPublic,
   UserPublic,
@@ -54,7 +57,7 @@ async function request<T>(
 
 /* ------------------------------------------------------------------ Auth */
 export const authApi = {
-  register: (body: { phone: string; password: string; name?: string }) =>
+  register: (body: { phone: string; password: string; name?: string; referralCode?: string }) =>
     request<{ user: UserPublic }>("/api/auth/register", {
       method: "POST",
       json: body,
@@ -235,5 +238,34 @@ export const adminApi = {
     request<{ url: string }>("/api/admin/upload", {
       method: "POST",
       json: { imageBase64, filename },
+    }),
+};
+
+/* -------------------------------------------------------------- Referrals */
+export const referralsApi = {
+  get: () => request<ReferralResponse>("/api/referrals", { method: "GET" }),
+  track: (code: string) =>
+    request<{ ok: true }>("/api/referrals/track", {
+      method: "POST",
+      json: { code },
+    }),
+  getPending: () =>
+    request<{ code: string | null }>("/api/referrals/track", { method: "GET" }),
+};
+
+/* --------------------------------------------------- Admin: Referrals */
+export interface AdminReferralSettingsPayload {
+  enabled?: boolean;
+  referralReward?: number;
+  welcomeBonus?: number;
+  qualifyingPrice?: number;
+}
+export const adminReferralsApi = {
+  get: () =>
+    request<AdminReferralReport>("/api/admin/referrals", { method: "GET" }),
+  update: (payload: AdminReferralSettingsPayload) =>
+    request<{ settings: ReferralSettingsPublic }>("/api/admin/referrals", {
+      method: "POST",
+      json: payload,
     }),
 };

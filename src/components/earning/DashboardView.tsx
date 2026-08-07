@@ -52,13 +52,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { dashboardApi, type DashboardResponse } from "@/lib/api";
+import { referralsApi } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { formatETB, formatDate, shortDate } from "@/lib/format";
 import { StatCard } from "@/components/earning/StatCard";
 import { StatusBadge, transactionStatusTone } from "@/components/earning/StatusBadge";
 import { EmptyState } from "@/components/earning/EmptyState";
 import { toast } from "sonner";
-import type { TransactionPublic } from "@/lib/types";
+import type { TransactionPublic, ReferralResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface NotificationItem {
@@ -98,6 +99,7 @@ const FALLBACK_DATA: DashboardResponse = {
 export function DashboardView() {
   const { user, setView } = useStore();
   const [data, setData] = useState<DashboardResponse | null>(null);
+  const [referral, setReferral] = useState<ReferralResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(false);
 
@@ -106,8 +108,14 @@ export function DashboardView() {
     setLoading(true);
     setApiError(false);
     try {
-      const res = await dashboardApi.get();
-      if (active) setData(res);
+      const [dash, ref] = await Promise.all([
+        dashboardApi.get(),
+        referralsApi.get().catch(() => null),
+      ]);
+      if (active) {
+        setData(dash);
+        setReferral(ref);
+      }
     } catch (err) {
       if (active) {
         setApiError(true);
@@ -132,11 +140,8 @@ export function DashboardView() {
     };
   }, []);
 
-  const referralLink = useMemo(() => {
-    if (!user) return "";
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/?ref=${user.id}`;
-  }, [user]);
+  const referralLink = referral?.referralLink ?? "";
+  const referralStats = referral?.stats ?? { totalReferrals: 0, activeReferrals: 0, referralEarnings: 0 };
 
   const notifications: NotificationItem[] = useMemo(() => {
     if (!data) return [];
@@ -164,6 +169,30 @@ export function DashboardView() {
         body: "Your investment package is now active.",
         tone: "green",
         when: formatDate(purchase.createdAt),
+      });
+    }
+    // Referral reward received
+    const referralReward = txns.find((t) => t.type === "REFERRAL" && t.status === "COMPLETED");
+    if (referralReward) {
+      items.push({
+        id: "referral-" + referralReward.id,
+        icon: <Gift className="size-4 text-gold-deep" />,
+        title: "Referral reward received",
+        body: `${formatETB(referralReward.amount)} referral bonus credited.`,
+        tone: "gold",
+        when: formatDate(referralReward.createdAt),
+      });
+    }
+    // Welcome bonus received
+    const welcomeBonus = txns.find((t) => t.type === "BONUS" && t.status === "COMPLETED");
+    if (welcomeBonus) {
+      items.push({
+        id: "welcome-" + welcomeBonus.id,
+        icon: <Gift className="size-4 text-green-deep" />,
+        title: "Welcome bonus received",
+        body: `${formatETB(welcomeBonus.amount)} welcome bonus credited.`,
+        tone: "green",
+        when: formatDate(welcomeBonus.createdAt),
       });
     }
     // Withdrawal approved
@@ -518,18 +547,24 @@ export function DashboardView() {
               <h3 className="text-lg font-bold text-foreground">Referral Program</h3>
             </div>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-xl border border-border/60 bg-card p-3">
                   <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
-                    <Users className="size-3" /> Total Referrals
+                    <Users className="size-3" /> Total
                   </div>
-                  <div className="mt-1 text-xl font-extrabold text-foreground">0</div>
+                  <div className="mt-1 text-xl font-extrabold text-foreground">{referralStats.totalReferrals}</div>
                 </div>
                 <div className="rounded-xl border border-border/60 bg-card p-3">
                   <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
-                    <Gift className="size-3" /> Referral Bonus
+                    <CheckCircle2 className="size-3" /> Active
                   </div>
-                  <div className="mt-1 text-xl font-extrabold text-green-deep">{formatETB(0)}</div>
+                  <div className="mt-1 text-xl font-extrabold text-green-deep">{referralStats.activeReferrals}</div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-card p-3">
+                  <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                    <Coins className="size-3" /> Earnings
+                  </div>
+                  <div className="mt-1 text-xl font-extrabold text-gold-gradient">{formatETB(referralStats.referralEarnings)}</div>
                 </div>
               </div>
               <div>
@@ -539,12 +574,17 @@ export function DashboardView() {
                     readOnly
                     value={referralLink}
                     onFocus={(e) => e.currentTarget.select()}
+                    placeholder="Loading your referral link…"
                     className="min-w-0 flex-1 truncate rounded-full border border-border/60 bg-muted/40 px-4 py-2 text-xs font-mono text-foreground"
                     aria-label="Referral link"
                   />
                   <Button
                     size="sm"
                     onClick={async () => {
+                      if (!referralLink) {
+                        setView("referral");
+                        return;
+                      }
                       try {
                         await navigator.clipboard.writeText(referralLink);
                         toast.success("Referral link copied");
@@ -557,9 +597,19 @@ export function DashboardView() {
                     <Copy className="size-3.5" /> Copy
                   </Button>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Share your link. Earn bonuses when friends invest.
-                </p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Share your link. Earn bonuses when friends invest.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setView("referral")}
+                    className="shrink-0 rounded-full border-green-deep/40 text-green-deep hover:bg-green-soft/60"
+                  >
+                    View details
+                  </Button>
+                </div>
               </div>
             </div>
           </Card>

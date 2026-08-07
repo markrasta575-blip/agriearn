@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   Sparkles,
+  Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "product", label: "Product", icon: <Package className="size-4" />, requiresLogin: false },
   { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="size-4" />, requiresLogin: true },
   { key: "myproducts", label: "My Products", icon: <Sparkles className="size-4" />, requiresLogin: true },
+  { key: "referral", label: "Referral", icon: <Gift className="size-4" />, requiresLogin: true },
   { key: "withdrawal", label: "Withdrawal", icon: <Wallet className="size-4" />, requiresLogin: true },
   { key: "admin", label: "Admin", icon: <ShieldCheck className="size-4" />, requiresLogin: true, adminOnly: true },
 ];

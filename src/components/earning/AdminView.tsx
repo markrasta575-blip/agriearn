@@ -33,6 +33,8 @@ import {
   ShieldAlert,
   Image as ImageIcon,
   Banknote,
+  Gift,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -72,16 +74,20 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   adminApi,
+  adminReferralsApi,
   productsApi,
   purchasesApi,
   withdrawalsApi,
   type ProductPayload,
+  type AdminReferralSettingsPayload,
 } from "@/lib/api";
 import { formatETB, formatNumber, formatDate, shortDate } from "@/lib/format";
 import type {
   AdminReport,
+  AdminReferralReport,
   ProductPublic,
   PurchasePublic,
+  ReferralSettingsPublic,
   Role,
   UserPublic,
   UserStatus,
@@ -94,6 +100,7 @@ import {
   withdrawalStatusTone,
 } from "@/components/earning/StatusBadge";
 import { ImageUpload } from "@/components/earning/ImageUpload";
+import { cn } from "@/lib/utils";
 
 /* ============================================================ Reports Tab */
 function ReportsTab() {
@@ -943,6 +950,7 @@ export function AdminView() {
       { value: "products", label: "Products", icon: <Package className="size-4" /> },
       { value: "purchases", label: "Purchases", icon: <ShoppingCart className="size-4" /> },
       { value: "withdrawals", label: "Withdrawals", icon: <Wallet className="size-4" /> },
+      { value: "referrals", label: "Referrals", icon: <Gift className="size-4" /> },
       { value: "users", label: "Users", icon: <Users className="size-4" /> },
     ],
     []
@@ -986,10 +994,298 @@ export function AdminView() {
         <TabsContent value="withdrawals" className="mt-6">
           <WithdrawalsTab />
         </TabsContent>
+        <TabsContent value="referrals" className="mt-6">
+          <ReferralsTab />
+        </TabsContent>
         <TabsContent value="users" className="mt-6">
           <UsersTab />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/* ============================================================ Referrals Tab */
+function ReferralsTab() {
+  const [report, setReport] = useState<AdminReferralReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<{
+    enabled: boolean;
+    referralReward: string;
+    welcomeBonus: string;
+    qualifyingPrice: string;
+  }>({ enabled: true, referralReward: "200", welcomeBonus: "100", qualifyingPrice: "2000" });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await adminReferralsApi.get();
+      setReport(res);
+      setForm({
+        enabled: res.settings.enabled,
+        referralReward: String(res.settings.referralReward),
+        welcomeBonus: String(res.settings.welcomeBonus),
+        qualifyingPrice: String(res.settings.qualifyingPrice),
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load referrals");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const toggleEnabled = async () => {
+    setSaving(true);
+    try {
+      const res = await adminReferralsApi.update({ enabled: !form.enabled });
+      setForm((f) => ({ ...f, enabled: res.settings.enabled }));
+      toast.success(res.settings.enabled ? "Referral program enabled" : "Referral program disabled");
+      void load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveSettings = async () => {
+    const rr = Number(form.referralReward);
+    const wb = Number(form.welcomeBonus);
+    const qp = Number(form.qualifyingPrice);
+    if (!(rr > 0 && wb > 0 && qp > 0)) {
+      toast.error("All amounts must be positive numbers");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload: AdminReferralSettingsPayload = {
+        enabled: form.enabled,
+        referralReward: rr,
+        welcomeBonus: wb,
+        qualifyingPrice: qp,
+      };
+      const res = await adminReferralsApi.update(payload);
+      setForm({
+        enabled: res.settings.enabled,
+        referralReward: String(res.settings.referralReward),
+        welcomeBonus: String(res.settings.welcomeBonus),
+        qualifyingPrice: String(res.settings.qualifyingPrice),
+      });
+      toast.success("Referral settings saved");
+      void load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <Card className="gold-ring p-8 text-center text-muted-foreground">
+        Could not load referral data.
+      </Card>
+    );
+  }
+
+  const s = report.stats;
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard
+          icon={<Users className="size-4" />}
+          label="Total Referrals"
+          value={String(s.totalReferrals)}
+          sublabel="Invites accepted"
+        />
+        <StatCard
+          icon={<BadgeCheck className="size-4" />}
+          label="Rewards Paid"
+          value={String(s.totalRewardsPaid)}
+          sublabel="Referral rewards"
+        />
+        <StatCard
+          icon={<Coins className="size-4" />}
+          label="Rewards Amount"
+          value={formatETB(s.totalRewardsAmount)}
+          sublabel="Paid to referrers"
+        />
+        <StatCard
+          icon={<Gift className="size-4" />}
+          label="Welcome Bonuses"
+          value={String(s.totalWelcomeBonuses)}
+          sublabel={`${formatETB(s.totalWelcomeBonusAmount)} paid`}
+        />
+      </div>
+
+      {/* Settings */}
+      <Card className="gold-ring p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Settings2 className="size-5 text-gold-deep" />
+          <h3 className="text-lg font-bold text-foreground">Program Settings</h3>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="ref-reward">Referral Reward (ETB)</Label>
+            <Input
+              id="ref-reward"
+              type="number"
+              value={form.referralReward}
+              onChange={(e) => setForm((f) => ({ ...f, referralReward: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="welcome-bonus">Welcome Bonus (ETB)</Label>
+            <Input
+              id="welcome-bonus"
+              type="number"
+              value={form.welcomeBonus}
+              onChange={(e) => setForm((f) => ({ ...f, welcomeBonus: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="qual-price">Qualifying Price (ETB)</Label>
+            <Input
+              id="qual-price"
+              type="number"
+              value={form.qualifyingPrice}
+              onChange={(e) => setForm((f) => ({ ...f, qualifyingPrice: e.target.value }))}
+            />
+          </div>
+          <div className="flex flex-col justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={toggleEnabled}
+              disabled={saving}
+              className={cn(
+                "rounded-full",
+                form.enabled
+                  ? "border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10"
+                  : "border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
+              )}
+            >
+              {form.enabled ? <Check className="size-4" /> : <X className="size-4" />}
+              {form.enabled ? "Enabled" : "Disabled"}
+            </Button>
+            <Button
+              onClick={saveSettings}
+              disabled={saving}
+              className="bg-gold-gradient text-primary-foreground shadow hover:opacity-90 rounded-full"
+            >
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Settings2 className="size-4" />}
+              Save Settings
+            </Button>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          The referral reward is paid to a referrer once their referral&rsquo;s qualifying
+          purchase is approved. The welcome bonus is paid once per account. Disabling
+          the program only stops new referral rewards (welcome bonuses are unaffected).
+        </p>
+      </Card>
+
+      {/* All referrals */}
+      <Card className="p-0">
+        <div className="flex items-center gap-2 border-b border-border/60 p-4">
+          <Users className="size-5 text-green-deep" />
+          <h3 className="text-lg font-bold text-foreground">All Referrals</h3>
+        </div>
+        <div className="max-h-80 overflow-y-auto scroll-gold">
+          {report.referrals.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">No referrals yet.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Referrer</TableHead>
+                  <TableHead>Referred</TableHead>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
+                  <TableHead className="text-right">Rewarded</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {report.referrals.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell>
+                      <div className="font-medium text-foreground">{r.referrerName ?? "Investor"}</div>
+                      <div className="text-xs text-muted-foreground">{r.referrerPhone}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium text-foreground">{r.referredName ?? "Investor"}</div>
+                      <div className="text-xs text-muted-foreground">{r.referredPhone}</div>
+                    </TableCell>
+                    <TableCell><span className="font-mono text-xs">{r.referralCode}</span></TableCell>
+                    <TableCell>
+                      {r.status === "REWARDED" ? (
+                        <StatusBadge label="Rewarded" tone="green" />
+                      ) : (
+                        <StatusBadge label="Pending" tone="amber" />
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">{formatDate(r.createdAt)}</TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">{r.rewardedAt ? formatDate(r.rewardedAt) : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </Card>
+
+      {/* All rewards */}
+      <Card className="p-0">
+        <div className="flex items-center gap-2 border-b border-border/60 p-4">
+          <Coins className="size-5 text-gold-deep" />
+          <h3 className="text-lg font-bold text-foreground">Referral Rewards</h3>
+        </div>
+        <div className="max-h-80 overflow-y-auto scroll-gold">
+          {report.rewards.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">No rewards paid yet.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Referrer</TableHead>
+                  <TableHead>Referred</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {report.rewards.map((rw) => (
+                  <TableRow key={rw.id}>
+                    <TableCell>
+                      <div className="font-medium text-foreground">{rw.referrerName ?? "Investor"}</div>
+                      <div className="text-xs text-muted-foreground">{rw.referrerPhone}</div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{rw.referredPhone}</TableCell>
+                    <TableCell className="text-right font-semibold text-green-deep">+{formatETB(rw.amount)}</TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">{formatDate(rw.createdAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

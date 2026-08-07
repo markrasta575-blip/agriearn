@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { createSession, hashPassword } from "@/lib/session";
 import { validatePhone } from "@/lib/validators";
@@ -37,6 +38,19 @@ export async function POST(req: Request) {
         ? body.name.trim()
         : null;
 
+    // Optional referral code: prefer the body, fall back to the pending_ref
+    // cookie set by /api/referrals/track (so visitors who clicked a /?ref=
+    // CODE link and later register still get attached to the referrer).
+    const bodyCode =
+      typeof body?.referralCode === "string" ? body.referralCode.trim() : "";
+    const cookieCode = (await cookies()).get("pending_ref")?.value ?? "";
+    const referralCode =
+      bodyCode && bodyCode.length > 0 && bodyCode.length <= 12
+        ? bodyCode.toUpperCase()
+        : cookieCode && cookieCode.length > 0 && cookieCode.length <= 12
+          ? cookieCode.toUpperCase()
+          : null;
+
     if (!phone) {
       return NextResponse.json(
         { ok: false, error: "Valid phone number is required (9-15 digits)" },
@@ -68,6 +82,56 @@ export async function POST(req: Request) {
         balance: 0,
       },
     });
+
+    // Attach a referrer (if a valid referralCode was provided and it points
+    // to a different user). Self-referral is impossible at registration time
+    // (the user didn't exist yet) but the guard is here for safety.
+    if (referralCode) {
+      try {
+        const referrer = await db.user.findUnique({
+          where: { referralCode },
+          select: { id: true },
+        });
+        if (referrer && referrer.id !== user.id) {
+          try {
+            await db.referral.create({
+              data: {
+                referrerId: referrer.id,
+                referredId: user.id,
+                referralCode,
+                status: "PENDING",
+              },
+            });
+            // Log a history event on the referrer's side.
+            await db.referralHistory
+              .create({
+                data: {
+                  userId: referrer.id,
+                  event: "REFERRED_REGISTERED",
+                  amount: 0,
+                  relatedId: user.id,
+                },
+              })
+              .catch(() => {});
+          } catch (createErr) {
+            const code = (createErr as { code?: string } | null)?.code;
+            // P2002 = this user already has a referrer row -> ignore.
+            if (code !== "P2002") {
+              console.error(
+                "[register] failed to create Referral row (non-fatal):",
+                createErr
+              );
+            }
+          }
+        }
+      } catch (findErr) {
+        // A bad/expired code should NEVER break registration.
+        console.error(
+          "[register] referral lookup failed (non-fatal):",
+          findErr
+        );
+      }
+    }
 
     await createSession(user.id);
     return NextResponse.json({ ok: true, data: { user: toPublic(user) } });

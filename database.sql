@@ -232,5 +232,101 @@ VALUES (
 );
 
 -- =====================================================================
+--  REFERRAL SYSTEM TABLES
+-- =====================================================================
+
+-- Add referral_code to users (one unique code per user).
+ALTER TABLE users
+  ADD COLUMN referralCode VARCHAR(16) NULL;
+CREATE UNIQUE INDEX uq_users_referralCode ON users(referralCode);
+
+-- referrals: one row per referred user (referredId is unique -> a user can
+-- only be referred once).
+CREATE TABLE referrals (
+  id           VARCHAR(40) NOT NULL,
+  referrerId   VARCHAR(40) NOT NULL,
+  referredId   VARCHAR(40) NOT NULL,
+  referralCode VARCHAR(16) NOT NULL,
+  status       ENUM('PENDING','REWARDED') NOT NULL DEFAULT 'PENDING',
+  createdAt    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  rewardedAt   DATETIME(3) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_referrals_referred (referredId),
+  KEY idx_referrals_referrer (referrerId),
+  CONSTRAINT fk_referrals_referrer FOREIGN KEY (referrerId) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_referrals_referred FOREIGN KEY (referredId) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- referral_rewards: one reward per referredId (prevents duplicate rewards).
+CREATE TABLE referral_rewards (
+  id            VARCHAR(40) NOT NULL,
+  referrerId    VARCHAR(40) NOT NULL,
+  referredId    VARCHAR(40) NOT NULL,
+  referralId    VARCHAR(40) NOT NULL,
+  purchaseId    VARCHAR(40) NOT NULL,
+  amount        DECIMAL(14,2) NOT NULL,
+  status        ENUM('COMPLETED') NOT NULL DEFAULT 'COMPLETED',
+  createdAt     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_referral_rewards_referred (referredId),
+  KEY idx_rr_referrer (referrerId),
+  CONSTRAINT fk_rr_referrer FOREIGN KEY (referrerId) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_rr_referral FOREIGN KEY (referralId) REFERENCES referrals(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- bonus_history: one WELCOME bonus per (userId, type) (prevents duplicates).
+CREATE TABLE bonus_history (
+  id         VARCHAR(40) NOT NULL,
+  userId     VARCHAR(40) NOT NULL,
+  type       ENUM('WELCOME','REFERRAL') NOT NULL,
+  amount     DECIMAL(14,2) NOT NULL,
+  purchaseId VARCHAR(40) NULL,
+  status     ENUM('COMPLETED') NOT NULL DEFAULT 'COMPLETED',
+  createdAt  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_bonus_user_type (userId, type),
+  KEY idx_bonus_user (userId),
+  CONSTRAINT fk_bonus_user FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- referral_history: log of referral-program events for display.
+CREATE TABLE referral_history (
+  id         VARCHAR(40) NOT NULL,
+  userId     VARCHAR(40) NOT NULL,
+  event      VARCHAR(60) NOT NULL,
+  amount     DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  relatedId  VARCHAR(40) NULL,
+  createdAt  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  KEY idx_rh_user (userId),
+  CONSTRAINT fk_rh_user FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- referral_setting: single row holding program config.
+CREATE TABLE referral_setting (
+  id              VARCHAR(40) NOT NULL,
+  enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+  referralReward  DECIMAL(14,2) NOT NULL DEFAULT 200.00,
+  welcomeBonus    DECIMAL(14,2) NOT NULL DEFAULT 100.00,
+  qualifyingPrice DECIMAL(14,2) NOT NULL DEFAULT 2000.00,
+  updatedAt       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Extend the transactions.type meaning (column stays VARCHAR):
+--   EARNING | WITHDRAWAL | PURCHASE | BONUS (welcome) | REFERRAL (referral reward)
+
+-- Seed: referral settings + admin referral code.
+INSERT INTO referral_setting (id, enabled, referralReward, welcomeBonus, qualifyingPrice)
+VALUES ('settings-single', TRUE, 200.00, 100.00, 2000.00)
+ON DUPLICATE KEY UPDATE
+  referralReward = VALUES(referralReward),
+  welcomeBonus = VALUES(welcomeBonus),
+  qualifyingPrice = VALUES(qualifyingPrice);
+
+-- Backfill a referral code for the admin (deterministic demo value).
+UPDATE users SET referralCode = 'SE64ZE2H' WHERE phone = '0990000000' AND referralCode IS NULL;
+
+-- =====================================================================
 --  END OF database.sql
 -- =====================================================================

@@ -19,6 +19,7 @@ model User {
   role      String   @default("USER") // USER | ADMIN
   balance   Float    @default(0) // withdrawable balance (ETB)
   status    String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  referralCode String? @unique // 8-char uppercase code, lazy-set on first /api/referrals GET
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -28,6 +29,13 @@ model User {
   bankAccounts BankAccount[]
   transactions Transaction[]
   sessions     Session[]
+
+  // Referral relations
+  referralsMade    Referral[]      @relation("Referrer")
+  referredBy       Referral?       @relation("Referred")
+  referralRewards  ReferralReward[]
+  bonusHistory     BonusHistory[]
+  referralHistory  ReferralHistory[]
 }
 
 model Session {
@@ -111,10 +119,75 @@ model Transaction {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        String // EARNING | WITHDRAWAL | PURCHASE
+  type        String // EARNING | WITHDRAWAL | PURCHASE | BONUS | REFERRAL
   amount      Float
   status      String   @default("COMPLETED") // PENDING | COMPLETED | FAILED | REJECTED
   description String?
   referenceId String?
   createdAt   DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Referral system
+// ---------------------------------------------------------------------------
+
+model Referral {
+  id           String   @id @default(cuid())
+  referrerId   String
+  referredId   String   @unique           // one referral row per referred user
+  referralCode String                       // the code used at signup
+  status       String   @default("PENDING") // PENDING -> REWARDED (paid)
+  createdAt    DateTime @default(now())
+  rewardedAt   DateTime?
+  referrer     User     @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred     User     @relation("Referred", fields: [referredId], references: [id], onDelete: Cascade)
+  rewards      ReferralReward[]
+}
+
+model ReferralReward {
+  id            String   @id @default(cuid())
+  referrerId    String                        // who gets paid
+  referredId    String                        // whose purchase triggered it
+  referralId    String                        // link to Referral row
+  purchaseId    String                        // the 2000 ETB purchase that triggered
+  amount        Float
+  status        String   @default("COMPLETED") // COMPLETED (we only pay after approval)
+  createdAt     DateTime @default(now())
+  referral      Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  referrer      User     @relation(fields: [referrerId], references: [id], onDelete: Cascade)
+  // uniqueness: one reward per (referredId) -> prevents duplicate referral rewards
+  @@unique([referredId])
+}
+
+model BonusHistory {
+  id         String   @id @default(cuid())
+  userId     String                          // who received the bonus
+  type       String                          // "WELCOME" | "REFERRAL"
+  amount     Float
+  purchaseId String?                         // the purchase that triggered (welcome)
+  status     String   @default("COMPLETED")
+  createdAt  DateTime @default(now())
+  // uniqueness: one WELCOME bonus per user -> prevents duplicate welcome bonus
+  @@unique([userId, type])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ReferralHistory {
+  // (a log of referral-program events for display)
+  id         String   @id @default(cuid())
+  userId     String                          // who the event is about (referrer or referred)
+  event      String                          // "REFERRED_REGISTERED" | "REFERRAL_REWARDED" | "WELCOME_BONUS"
+  amount     Float     @default(0)
+  relatedId  String?                         // referral id or purchase id
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ReferralSetting {
+  id               String  @id @default(cuid())
+  enabled          Boolean @default(true)
+  referralReward   Float   @default(200)
+  welcomeBonus     Float   @default(100)
+  qualifyingPrice  Float   @default(2000)   // product price that qualifies for referral reward + welcome bonus
+  updatedAt        DateTime @updatedAt
 }
