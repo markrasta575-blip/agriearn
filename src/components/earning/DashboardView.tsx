@@ -29,7 +29,7 @@ import {
   ShoppingCart,
   CreditCard,
   User as UserIcon,
-  Headphones,
+  Send,
   Calendar,
   Hash,
   Banknote,
@@ -310,9 +310,9 @@ export function DashboardView() {
               <QuickAction icon={<Package className="size-4" />} label="My Products" onClick={() => setView("myproducts")} tone="outline" />
               <QuickAction icon={<UserIcon className="size-4" />} label="Profile" onClick={() => setView("dashboard")} tone="outline" />
               <QuickAction
-                icon={<Headphones className="size-4" />}
-                label="Support"
-                onClick={() => toast.info("Customer support: call 0990-000-000 or email support@agriearn.app")}
+                icon={<Send className="size-4" />}
+                label="Support: @Markworld999"
+                href="https://t.me/Markworld999"
                 tone="outline"
               />
             </div>
@@ -759,24 +759,35 @@ function QuickAction({
   icon,
   label,
   onClick,
+  href,
   tone,
 }: {
   icon: React.ReactNode;
   label: string;
-  onClick: () => void;
+  onClick?: () => void;
+  href?: string;
   tone: "gold" | "green" | "outline";
 }) {
+  const cls = cn(
+    "rounded-full font-semibold",
+    tone === "gold" && "bg-gold-gradient text-primary-foreground shadow hover:opacity-90",
+    tone === "green" && "bg-green-gradient text-white shadow hover:opacity-90",
+    tone === "outline" && "border-green-deep/40 text-green-deep hover:bg-green-soft/60"
+  );
+  // When href is provided, render as an anchor so the link opens in a new tab
+  // (and on mobile, the OS opens the Telegram app via the t.me URL scheme).
+  if (href) {
+    return (
+      <Button asChild size="sm" className={cls}>
+        <a href={href} target="_blank" rel="noopener noreferrer">
+          {icon}
+          {label}
+        </a>
+      </Button>
+    );
+  }
   return (
-    <Button
-      onClick={onClick}
-      size="sm"
-      className={cn(
-        "rounded-full font-semibold",
-        tone === "gold" && "bg-gold-gradient text-primary-foreground shadow hover:opacity-90",
-        tone === "green" && "bg-green-gradient text-white shadow hover:opacity-90",
-        tone === "outline" && "border-green-deep/40 text-green-deep hover:bg-green-soft/60"
-      )}
-    >
+    <Button onClick={onClick} size="sm" className={cls}>
       {icon}
       {label}
     </Button>

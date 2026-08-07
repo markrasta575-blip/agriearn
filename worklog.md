@@ -417,3 +417,24 @@ Work Log:
 
 Stage Summary:
 - "Referral data unavailable" message removed permanently. Referral page always renders: Referral Code, Referral Link, Total/Active/Earnings (zeros when no data), Copy buttons, Telegram/WhatsApp/Facebook share. On API failure, a non-blocking Retry banner appears instead of blocking the page. Backend queries are non-fatal. No existing features changed.
+
+---
+Task ID: 15
+Agent: orchestrator (main)
+Task: Update Support button to open Telegram (@Markworld999) in a new tab. No other features changed.
+
+Work Log:
+- src/components/earning/DashboardView.tsx:
+  - Added `Send` (paper-plane / Telegram) icon to imports; removed now-unused `Headphones`.
+  - Extended the `QuickAction` component to accept an optional `href`. When `href` is set, it renders as an `<a target="_blank" rel="noopener noreferrer">` (via shadcn `Button asChild`) so the link opens in a new browser tab; on mobile the OS intercepts the t.me URL and opens the Telegram app if installed. Existing `onClick` behavior is unchanged for the other quick actions.
+  - Replaced the Support quick action: icon=`Send`, label="Support: @Markworld999", href="https://t.me/Markworld999". Removed the old toast.info call.
+- Verification (Agent Browser):
+  - Support button is now an anchor (`link` role) with label "Support: @Markworld999".
+  - Attributes: href="https://t.me/Markworld999", target="_blank", rel="noopener noreferrer" (verified via eval).
+  - Clicking it opened a new browser tab navigating to https://t.me/Markworld999.
+  - VLM confirmed the Telegram/paper-plane icon + preserved green/gold theme.
+  - `bun run lint` PASS; dev.log clean.
+- No other pages or functions modified.
+
+Stage Summary:
+- Support button now opens https://t.me/Markworld999 in a new tab (or the Telegram app on mobile). Label "Support: @Markworld999" with a Telegram icon. Green/gold theme preserved.
