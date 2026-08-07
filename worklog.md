@@ -390,3 +390,30 @@ End-to-end verification (Agent Browser + curl):
 
 Stage Summary:
 - Complete referral system live: referral page in nav, reward rules (referrer +200 after referred 2000-ETB purchase approved; buyer +100 welcome bonus once), dashboard cards, admin panel (view all, toggle, change amounts), transaction recording (REFERRAL +200, BONUS +100), security (no duplicate rewards, no self-referral, paid only after approval). database.sql to be updated with the 5 new tables in a follow-up.
+
+---
+Task ID: 14
+Agent: orchestrator (main)
+Task: Fix Referral page loading issue — remove "Referral data unavailable", always show zeros.
+
+Work Log:
+- Root cause: the "Referral data unavailable. We couldn't load your referral info." was a full-screen EmptyState error in src/components/earning/ReferralView.tsx that rendered when the /api/referrals call threw (e.g., session expired or network drop). It blocked the whole page instead of showing zeros.
+- Note: this is a Next.js 16 + TypeScript + Prisma project. There is NO PHP. SQL schema lives in /database.sql.
+- Fix 1 — src/app/api/referrals/route.ts: made ensureReferralCode + getReferralSettings + every DB query non-fatal (wrapped in try/catch with .catch fallbacks). The API now ALWAYS returns valid JSON for a logged-in user (code "" + zeros + empty arrays if anything fails). Default settings fallback (200/100/2000) used if settings read fails.
+- Fix 2 — src/components/earning/ReferralView.tsx:
+  - Added FALLBACK_DATA (zeros + empty arrays + default settings).
+  - Removed the `if (!data)` "Referral data unavailable" EmptyState block (requirement #8).
+  - Now uses `const safeData = data ?? FALLBACK_DATA` so the full referral page ALWAYS renders (with zeros when no data / API error) (requirements #9, #10).
+  - Added an `apiError` state + non-blocking amber Retry banner shown ONLY when the API actually failed — the page still renders below it (requirement #7).
+  - Refactored the loader into `loadReferral()` (reusable by Retry).
+  - When code/link are empty (fallback), the code shows "———", Copy buttons are disabled, share buttons are disabled, and the link input shows a placeholder — so the UI is clean even on failure.
+- Verification (Agent Browser):
+  - Normal load (admin): code SE64ZE2H + link + all sections. "Referral data unavailable" count = 0.
+  - Blocked /api/referrals (simulated failure): page shows Retry banner + "———" code + disabled buttons + zeros. "Referral data unavailable" count = 0.
+  - Clicked Retry after unblocking: real data restored (SE64ZE2H), banner gone.
+  - Brand-new user (no records): "Invite Friends" header + zeros + "No referrals yet" empty state + freshly generated code/link + Copy buttons. "Referral data unavailable" count = 0.
+  - VLM confirmed referral page with all elements, green/gold theme, no error.
+- `bun run lint` PASS; dev.log clean. No existing features changed.
+
+Stage Summary:
+- "Referral data unavailable" message removed permanently. Referral page always renders: Referral Code, Referral Link, Total/Active/Earnings (zeros when no data), Copy buttons, Telegram/WhatsApp/Facebook share. On API failure, a non-blocking Retry banner appears instead of blocking the page. Backend queries are non-fatal. No existing features changed.

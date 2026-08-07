@@ -14,6 +14,8 @@ import {
   Sparkles,
   Loader2,
   TrendingUp,
+  Info,
+  RefreshCw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,29 +36,44 @@ import { EmptyState } from "@/components/earning/EmptyState";
 import { toast } from "sonner";
 import type { ReferralResponse } from "@/lib/types";
 
+// Default referral data used when the API has no records OR the request fails.
+// This guarantees the referral page ALWAYS renders with zeros + an empty link
+// instead of an error screen (requirements: show zeros, never show "unavailable").
+const FALLBACK_DATA: ReferralResponse = {
+  code: "",
+  referralLink: "",
+  stats: { totalReferrals: 0, activeReferrals: 0, referralEarnings: 0 },
+  history: [],
+  referred: [],
+  settings: { enabled: true, referralReward: 200, welcomeBonus: 100, qualifyingPrice: 2000 },
+};
+
 export function ReferralView() {
   const { setView } = useStore();
   const [data, setData] = useState<ReferralResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState(false);
+
+  const loadReferral = async () => {
+    setLoading(true);
+    setApiError(false);
+    try {
+      const res = await referralsApi.get();
+      setData(res);
+    } catch (err) {
+      setApiError(true);
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Couldn't reach the referral service. Showing default values."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await referralsApi.get();
-        if (active) setData(res);
-      } catch (err) {
-        if (active) {
-          toast.error(err instanceof Error ? err.message : "Failed to load referral data");
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
+    void loadReferral();
   }, []);
 
   const copyLink = async (text: string, label = "Referral link") => {
@@ -69,8 +86,11 @@ export function ReferralView() {
   };
 
   const share = (platform: "telegram" | "whatsapp" | "facebook") => {
-    if (!data) return;
-    const link = data.referralLink;
+    const link = referralLink;
+    if (!link) {
+      toast.error("Referral link is not available yet — tap Retry.");
+      return;
+    }
     const text = "Join AgriEarn and earn daily income from agriculture packages!";
     let url = "";
     if (platform === "telegram") {
@@ -99,27 +119,40 @@ export function ReferralView() {
     );
   }
 
-  if (!data) {
-    return (
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
-        <EmptyState
-          icon={<Gift className="size-6" />}
-          title="Referral data unavailable"
-          description="We couldn't load your referral info. Please try again."
-          action={
-            <Button onClick={() => window.location.reload()} className="bg-gold-gradient text-primary-foreground rounded-full">
-              Retry
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
-  const { code, referralLink, stats, history, referred, settings } = data;
+  // IMPORTANT: we never show a "Referral data unavailable" error screen.
+  // If the API failed or there's no data yet, we render the full referral page
+  // with fallback zero values + an empty referral link, and a non-blocking
+  // retry banner when the API actually errored.
+  const safeData = data ?? FALLBACK_DATA;
+  const { code, referralLink, stats, history, referred, settings } = safeData;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:py-10">
+      {/* Non-blocking retry banner (only when the API actually errored) */}
+      {apiError && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-50 p-4 text-sm sm:flex-row sm:items-center"
+        >
+          <div className="flex items-start gap-2">
+            <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <span className="text-amber-800">
+              We couldn&rsquo;t load your referral details. Showing default
+              values below — your code and link will appear after a successful
+              refresh.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void loadReferral()}
+            className="shrink-0 rounded-full border-amber-500/40 text-amber-700 hover:bg-amber-100"
+          >
+            <RefreshCw className="size-3.5" /> Retry
+          </Button>
+        </motion.div>
+      )}
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="overflow-hidden border-0 bg-gradient-to-br from-green-soft via-card to-gold-soft p-6 sm:p-8">
@@ -163,12 +196,13 @@ export function ReferralView() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="rounded-xl border border-border/60 bg-gold-soft/50 px-4 py-2.5 font-mono text-lg font-extrabold tracking-[0.2em] text-gold-deep">
-                  {code}
+                  {code || "———"}
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
                   className="rounded-full"
+                  disabled={!code}
                   onClick={() => copyLink(code, "Code")}
                 >
                   <Copy className="size-3.5" /> Copy
@@ -184,12 +218,14 @@ export function ReferralView() {
                 <input
                   readOnly
                   value={referralLink}
+                  placeholder="Your referral link will appear here"
                   onFocus={(e) => e.currentTarget.select()}
                   className="min-w-0 flex-1 truncate rounded-full border border-border/60 bg-muted/40 px-4 py-2.5 text-xs font-mono text-foreground"
                   aria-label="Referral link"
                 />
                 <Button
                   onClick={() => copyLink(referralLink)}
+                  disabled={!referralLink}
                   className="shrink-0 rounded-full bg-green-gradient text-white shadow hover:opacity-90"
                 >
                   <Copy className="size-3.5" /> Copy Link
@@ -207,6 +243,7 @@ export function ReferralView() {
               size="sm"
               variant="outline"
               className="gap-2 rounded-full"
+              disabled={!referralLink}
               onClick={() => share("telegram")}
             >
               <MessageCircle className="size-4 text-sky-600" /> Telegram
@@ -215,6 +252,7 @@ export function ReferralView() {
               size="sm"
               variant="outline"
               className="gap-2 rounded-full"
+              disabled={!referralLink}
               onClick={() => share("whatsapp")}
             >
               <MessageCircle className="size-4 text-emerald-600" /> WhatsApp
@@ -223,6 +261,7 @@ export function ReferralView() {
               size="sm"
               variant="outline"
               className="gap-2 rounded-full"
+              disabled={!referralLink}
               onClick={() => share("facebook")}
             >
               <Share2 className="size-4 text-blue-700" /> Facebook

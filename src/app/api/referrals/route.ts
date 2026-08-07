@@ -31,33 +31,46 @@ export async function GET(req: Request) {
   try {
     const user = await requireUser();
 
-    const [code, settings] = await Promise.all([
-      ensureReferralCode(user.id),
-      getReferralSettings(),
-    ]);
+    // ensureReferralCode + settings are best-effort: a failure here must NOT
+    // break the referral page. The API should always return valid JSON (zeros
+    // + an empty link if the code couldn't be generated).
+    let code = "";
+    try {
+      code = await ensureReferralCode(user.id);
+    } catch (codeErr) {
+      console.error("[referrals] ensureReferralCode failed (non-fatal):", codeErr);
+    }
+    let settings;
+    try {
+      settings = await getReferralSettings();
+    } catch (settingsErr) {
+      console.error("[referrals] getReferralSettings failed (non-fatal):", settingsErr);
+      settings = { enabled: true, referralReward: 200, welcomeBonus: 100, qualifyingPrice: 2000 };
+    }
 
     const [totalReferrals, activeReferrals, rewardsAgg, historyRaw, referredRaw] =
       await Promise.all([
-        db.referral.count({ where: { referrerId: user.id } }),
-        db.referral.count({
-          where: { referrerId: user.id, status: "REWARDED" },
-        }),
-        db.referralReward.aggregate({
-          _sum: { amount: true },
-          where: { referrerId: user.id },
-        }),
-        db.referralHistory.findMany({
-          where: { userId: user.id },
-          orderBy: { createdAt: "desc" },
-          take: 50,
-        }),
-        db.referral.findMany({
-          where: { referrerId: user.id },
-          include: {
-            referred: { select: { phone: true, name: true, createdAt: true } },
-          },
-          orderBy: { createdAt: "desc" },
-        }),
+        db.referral.count({ where: { referrerId: user.id } }).catch(() => 0),
+        db.referral
+          .count({ where: { referrerId: user.id, status: "REWARDED" } })
+          .catch(() => 0),
+        db.referralReward
+          .aggregate({ _sum: { amount: true }, where: { referrerId: user.id } })
+          .catch(() => ({ _sum: { amount: 0 } })),
+        db.referralHistory
+          .findMany({
+            where: { userId: user.id },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+          })
+          .catch(() => []),
+        db.referral
+          .findMany({
+            where: { referrerId: user.id },
+            include: { referred: { select: { phone: true, name: true, createdAt: true } } },
+            orderBy: { createdAt: "desc" },
+          })
+          .catch(() => []),
       ]);
 
     const stats: ReferralStats = {
