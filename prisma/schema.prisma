@@ -119,7 +119,7 @@ model Transaction {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        String // EARNING | WITHDRAWAL | PURCHASE | BONUS | REFERRAL
+  type        String // EARNING | WITHDRAWAL | PURCHASE | BONUS | REFERRAL | ACTIVATION_BONUS | DAILY_EARNING
   amount      Float
   status      String   @default("COMPLETED") // PENDING | COMPLETED | FAILED | REJECTED
   description String?
@@ -162,13 +162,16 @@ model ReferralReward {
 model BonusHistory {
   id         String   @id @default(cuid())
   userId     String                          // who received the bonus
-  type       String                          // "WELCOME" | "REFERRAL"
+  type       String                          // "WELCOME" | "REFERRAL" | "ACTIVATION"
   amount     Float
-  purchaseId String?                         // the purchase that triggered (welcome)
+  purchaseId String?                         // the purchase that triggered (welcome / activation)
+  productId  String?                         // the product this activation bonus is for (teff)
   status     String   @default("COMPLETED")
   createdAt  DateTime @default(now())
-  // uniqueness: one WELCOME bonus per user -> prevents duplicate welcome bonus
+  // uniqueness: one WELCOME bonus per user (userId,type) -> no duplicate welcome.
+  // one ACTIVATION bonus per purchase (purchaseId,type) -> no duplicate teff bonus on re-approve.
   @@unique([userId, type])
+  @@unique([purchaseId, type])
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 

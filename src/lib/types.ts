@@ -84,7 +84,14 @@ export interface BankAccountPublic {
 export interface TransactionPublic {
   id: string;
   userId: string;
-  type: "EARNING" | "WITHDRAWAL" | "PURCHASE" | "BONUS" | "REFERRAL";
+  type:
+    | "EARNING"
+    | "WITHDRAWAL"
+    | "PURCHASE"
+    | "BONUS"
+    | "REFERRAL"
+    | "ACTIVATION_BONUS"
+    | "DAILY_EARNING";
   amount: number;
   status: "PENDING" | "COMPLETED" | "FAILED" | "REJECTED";
   description: string | null;

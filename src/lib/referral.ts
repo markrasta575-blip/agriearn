@@ -30,6 +30,12 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export const CODE_LENGTH = 8;
 export const SETTINGS_SINGLE_ID = "settings-single";
 
+// Teff Investment Package — carries a one-time 500 ETB activation bonus credited
+// on first activation (once per purchase). Identified by name so admin-created
+// duplicates or re-seeds still match.
+export const TEFF_PRODUCT_NAME = "Teff Investment Package";
+export const TEFF_ACTIVATION_BONUS = 500;
+
 const DEFAULT_SETTINGS: ReferralSettingsPublic = {
   enabled: true,
   referralReward: 200,
@@ -178,6 +184,80 @@ async function payWelcomeBonus(args: {
 }
 
 /**
+ * Pay the one-time Teff activation bonus (500 ETB) to the buyer on the FIRST
+ * activation of the Teff Investment Package. Idempotent:
+ *   - keyed on BonusHistory.purchaseId (unique) so re-approving the same
+ *     purchase never credits a second 500 ETB.
+ *   - the product name must match TEFF_PRODUCT_NAME.
+ * Recorded as a separate BONUS transaction (type "ACTIVATION_BONUS").
+ *
+ * NOTE: this is independent of the WELCOME bonus (which is once per account
+ * for any qualifying purchase). The Teff activation bonus is once per Teff
+ * purchase.
+ */
+async function payActivationBonus(args: {
+  userId: string;
+  purchaseId: string;
+  productId: string;
+  productName: string;
+  amount: number;
+}): Promise<void> {
+  const { userId, purchaseId, productId, productName, amount } = args;
+
+  // Only the Teff product earns the activation bonus.
+  if (productName !== TEFF_PRODUCT_NAME) return;
+
+  // Check-before-insert keyed on (purchaseId, type="ACTIVATION"). The compound
+  // @unique([purchaseId, type]) is the real guard; this avoids needless
+  // transactions in the common already-paid case.
+  const existing = await db.bonusHistory.findFirst({
+    where: { purchaseId, type: "ACTIVATION" },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.bonusHistory.create({
+        data: {
+          userId,
+          type: "ACTIVATION",
+          amount,
+          purchaseId,
+          productId,
+          status: "COMPLETED",
+        },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: { balance: { increment: amount } },
+      });
+      await tx.transaction.create({
+        data: {
+          userId,
+          type: "ACTIVATION_BONUS",
+          amount,
+          status: "COMPLETED",
+          description: "Teff activation bonus",
+          referenceId: purchaseId,
+        },
+      });
+      await tx.referralHistory.create({
+        data: {
+          userId,
+          event: "ACTIVATION_BONUS",
+          amount,
+          relatedId: purchaseId,
+        },
+      });
+    });
+  } catch (err) {
+    if (isP2002(err)) return; // already paid by a concurrent approve
+    throw err;
+  }
+}
+
+/**
  * Pay a referral reward to the referrer of `referredId` for the given
  * purchase. Idempotent: if a ReferralReward row already exists for this
  * referredId, or the program is disabled, or the purchase is below the
@@ -270,6 +350,7 @@ export async function processPurchaseActivationRewards(purchase: {
   price: number;
   status: string;
   activationDate: Date | null;
+  productId: string;
   product: { name: string } | null;
 }): Promise<void> {
   try {
@@ -277,6 +358,7 @@ export async function processPurchaseActivationRewards(purchase: {
     if (purchase.status !== "ACTIVE") return;
 
     const settings = await getReferralSettings();
+    const productName = purchase.product?.name ?? "";
 
     // (a) Welcome bonus — paid regardless of the referral toggle, but only if
     //     the purchase price meets the qualifying threshold.
@@ -295,7 +377,27 @@ export async function processPurchaseActivationRewards(purchase: {
       }
     }
 
-    // (b) Referral reward — only paid if the program is enabled.
+    // (b) Teff activation bonus — one-time 500 ETB on first activation of the
+    //     Teff Investment Package. Keyed on (purchaseId, type=ACTIVATION) so
+    //     re-approving the same purchase never credits it again.
+    if (productName === TEFF_PRODUCT_NAME) {
+      try {
+        await payActivationBonus({
+          userId: purchase.userId,
+          purchaseId: purchase.id,
+          productId: purchase.productId,
+          productName,
+          amount: TEFF_ACTIVATION_BONUS,
+        });
+      } catch (err) {
+        console.error(
+          `[referral] payActivationBonus failed (non-fatal) for purchase ${purchase.id}:`,
+          err
+        );
+      }
+    }
+
+    // (c) Referral reward — only paid if the program is enabled.
     try {
       await payReferralReward({
         referredId: purchase.userId,

@@ -438,3 +438,35 @@ Work Log:
 
 Stage Summary:
 - Support button now opens https://t.me/Markworld999 in a new tab (or the Telegram app on mobile). Label "Support: @Markworld999" with a Telegram icon. Green/gold theme preserved.
+
+---
+Task ID: 16
+Agent: orchestrator (main)
+Task: Add Teff Investment Package (3rd product) with one-time 500 ETB activation bonus. No existing features changed.
+
+Work Log:
+- Generated /public/teff.jpg (1024x1024, teff grain + flour) via image-generation skill.
+- scripts/seed.ts: added Teff product (6,500 ETB, 650/day, image /teff.jpg, benefits incl. "One-time 500 ETB activation bonus"). Wheat & Corn unchanged.
+- prisma/schema.prisma: BonusHistory — added `productId String?` field; replaced single `purchaseId @unique` with compound `@@unique([purchaseId, type])` so both WELCOME and ACTIVATION bonus rows can share the same purchaseId without colliding. Updated Transaction.type comment to include ACTIVATION_BONUS | DAILY_EARNING.
+- src/lib/referral.ts: added TEFF_PRODUCT_NAME + TEFF_ACTIVATION_BONUS constants; added `payActivationBonus()` (idempotent: keyed on (purchaseId, type=ACTIVATION) via findFirst + the compound @unique guard; P2002 swallowed; writes BonusHistory{type:ACTIVATION}, increments user.balance, creates Transaction{type:ACTIVATION_BONUS, "Teff activation bonus"}, creates ReferralHistory{ACTIVATION_BONUS}). Wired into `processPurchaseActivationRewards` (only fires when product name === TEFF_PRODUCT_NAME). Existing welcome bonus + referral reward logic untouched.
+- src/app/api/purchases/approve/route.ts: passes `productId` to processPurchaseActivationRewards.
+- src/lib/types.ts: extended TransactionPublic.type union with ACTIVATION_BONUS | DAILY_EARNING.
+- src/components/earning/DashboardView.tsx: active product card shows "Activation Bonus: 500 ETB" gold badge for teff purchases.
+- src/components/earning/ProductView.tsx: added Gift import; teff details dialog shows "First activation bonus: 500 ETB (credited once on first activation)" callout.
+- Verified the activation bonus logic directly via a Bun script (HTTP-independent):
+  - balance 0 -> 600 after approve (100 welcome + 500 activation).
+  - transactions: ACTIVATION_BONUS 500, BONUS 100, PURCHASE 6500.
+  - re-approve: balance stays 600 (no duplicate — findFirst finds existing ACTIVATION row).
+- Agent Browser verification (full flow):
+  1. Three products visible: Wheat (2,000/100), Corn (3,500/350), Teff (6,500/650).
+  2. Teff card: image, name, Agriculture badge, 6,500 ETB, 650 ETB/day, Available, Buy Now, View Details.
+  3. Details dialog: "First activation bonus: 500 ETB".
+  4. Buy Now -> payment page (6,500 ETB) -> Bank Transfer -> Confirm -> "Request Submitted".
+  5. Admin -> Purchases -> Approve -> ACTIVE.
+  6. User dashboard: Teff under Active Products, price 6,500, daily 650, "Activation Bonus: 500 ETB" badge, +650 daily earning transaction.
+  7. Transactions: ACTIVATION_BONUS 500 "Teff activation bonus", BONUS 100 "Welcome Bonus", PURCHASE 6500, EARNING 650.
+  8. Re-approve same teff purchase -> balance UNCHANGED (3,000 -> 3,000), no duplicate bonus.
+- `bun run lint` PASS; dev.log clean. Wheat & Corn products, referral system, withdrawal, dashboard, login, payment all unchanged.
+
+Stage Summary:
+- Teff Investment Package added as 3rd product. One-time 500 ETB activation bonus credited on first activation (idempotent — re-approve never duplicates). Daily 650 ETB earnings accrue. All transactions recorded. Existing products/features untouched.

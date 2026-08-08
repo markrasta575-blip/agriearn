@@ -118,6 +118,47 @@ async function main() {
     console.log("✓ Ensured product:", corn.name);
   }
 
+  // Teff product
+  const teffName = "Teff Investment Package";
+  const existingTeff = await db.product.findFirst({ where: { name: teffName } });
+  const teffBenefits = JSON.stringify([
+    "Earn 650 ETB every single day",
+    "Premium package — 6,500 ETB",
+    "One-time 500 ETB activation bonus",
+    "Backed by real agriculture assets",
+    "Daily payouts to your wallet",
+    "Withdraw anytime (min 300 ETB)",
+  ]);
+  if (!existingTeff) {
+    const teff = await db.product.create({
+      data: {
+        name: teffName,
+        category: "Agriculture",
+        price: 6500,
+        dailyIncome: 650,
+        description:
+          "Purchase the Teff Investment Package for 6,500 ETB. After the payment is confirmed, the package becomes active, the user starts earning 650 ETB per day according to the platform's business rules, and a one-time 500 ETB activation bonus is credited on first activation.",
+        image: "/teff.jpg",
+        benefits: teffBenefits,
+        status: "AVAILABLE",
+      },
+    });
+    console.log("✓ Created product:", teff.name, "(", teff.id, ")");
+  } else {
+    const teff = await db.product.update({
+      where: { id: existingTeff.id },
+      data: {
+        category: "Agriculture",
+        price: 6500,
+        dailyIncome: 650,
+        image: "/teff.jpg",
+        benefits: teffBenefits,
+        status: "AVAILABLE",
+      },
+    });
+    console.log("✓ Ensured product:", teff.name);
+  }
+
   console.log("\nSeeding complete.");
   console.log("Admin login  -> phone: 0990000000  password: admin123");
 

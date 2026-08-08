@@ -79,8 +79,9 @@ export async function POST(req: Request) {
       });
     }
 
-    // Pay referral + welcome-bonus rewards for this activation. Idempotent +
-    // non-fatal: any failure is logged inside the helper but never rethrown.
+    // Pay referral + welcome-bonus + teff activation-bonus rewards for this
+    // activation. Idempotent + non-fatal: any failure is logged inside the
+    // helper but never rethrown.
     try {
       await processPurchaseActivationRewards({
         id: purchase.id,
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
         price: purchase.price,
         status: purchase.status,
         activationDate: purchase.activationDate,
+        productId: purchase.productId,
         product: purchase.product
           ? { name: purchase.product.name }
           : null,

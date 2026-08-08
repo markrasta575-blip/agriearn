@@ -14,6 +14,7 @@ import {
   Eye,
   CircleDot,
   ShieldCheck,
+  Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -419,6 +420,16 @@ function ProductDetailsDialog({
                 </div>
               </div>
             </div>
+            {product.name === "Teff Investment Package" && (
+              <div className="flex items-center gap-2 rounded-xl border border-gold/40 bg-gold-soft/40 p-3 text-sm">
+                <Gift className="size-4 text-gold-deep" />
+                <span className="text-foreground">
+                  First activation bonus:{" "}
+                  <span className="font-extrabold text-gold-deep">500 ETB</span>{" "}
+                  <span className="text-xs text-muted-foreground">(credited once on first activation)</span>
+                </span>
+              </div>
+            )}
             {product.benefits.length > 0 && (
               <ul className="grid gap-2">
                 {product.benefits.map((b, i) => (

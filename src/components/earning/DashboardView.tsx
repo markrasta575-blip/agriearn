@@ -485,6 +485,12 @@ export function DashboardView() {
                         <span>Income: <span className="font-semibold text-green-deep">{formatETB(p.dailyIncome)}/day</span></span>
                         <span>Active since: <span className="font-semibold text-foreground">{formatDate(p.activationDate)}</span></span>
                       </div>
+                      {p.productName === "Teff Investment Package" && (
+                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gold-soft px-2.5 py-0.5 text-[11px] font-semibold text-gold-deep w-fit">
+                          <Gift className="size-3" />
+                          Activation Bonus: 500 ETB
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>
