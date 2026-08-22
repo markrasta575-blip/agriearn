@@ -1,5 +1,8 @@
 // Z.ai Earning Platform - Database Schema
-// SQLite (Prisma) for the live Next.js app.
+// Works with BOTH SQLite (local dev) and PostgreSQL (Vercel/production).
+// The provider is chosen automatically via the DATABASE_URL scheme:
+//   - "file:./db/custom.db"      -> SQLite (local)
+//   - "postgres://..."            -> PostgreSQL (Vercel Postgres, Supabase, etc.)
 // A MySQL equivalent (database.sql) ships in /database.sql for XAMPP users.
 
 generator client {
@@ -7,7 +10,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
